@@ -527,7 +527,7 @@ form_add_connection() {
         --add-entry="Indirizzo IP o Host (es. 192.168.4.162)" \
         --add-entry="Nome Utente (es. $USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Rilevamento Automatico (Wayland o X11 - Consigliato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Sessione Grafica X11 (SSH Forwarding con Xwayland)|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
+        --combo-values="Chiedi sempre (Rileva DE disponibili sul server al collegamento) - Consigliato|Rilevamento Automatico (Avvia il primo DE trovato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell e App Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Sessione Grafica X11 (SSH Forwarding con Xwayland)|Terminale Remoto (Rilevamento Automatico)|File Manager Remoto|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
         --separator="|" 2>/dev/null) || f_status=$?
 
     if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
@@ -545,9 +545,10 @@ form_add_connection() {
         return 0
     fi
 
-    local session_code="auto"
+    local session_code="ask"
     local custom_cmd=""
     case "$sess_label" in
+        *"Chiedi sempre"*) session_code="ask" ;;
         *"Rilevamento Automatico"*) session_code="auto" ;;
         *"Cinnamon"*) session_code="cinnamon" ;;
         *"GNOME Desktop"*) session_code="gnome" ;;
@@ -565,6 +566,7 @@ form_add_connection() {
         *"Weston"*) session_code="weston" ;;
         *"X11"*) session_code="x11" ;;
         *"Terminale Remoto"*) session_code="terminal" ;;
+        *"File Manager"*) session_code="files" ;;
         *"Ghostty"*) session_code="ghostty" ;;
         *"Kitty"*) session_code="kitty" ;;
         *"Alacritty"*) session_code="alacritty" ;;
@@ -626,7 +628,7 @@ form_edit_connection() {
         --add-entry="Indirizzo IP o Host (attuale: $CONN_HOST)" \
         --add-entry="Nome Utente (attuale: $CONN_USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Mantieni attuale ($CONN_SESSION)|Rilevamento Automatico (Wayland o X11 - Consigliato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Sessione Grafica X11 (SSH Forwarding con Xwayland)|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
+        --combo-values="Mantieni attuale ($CONN_SESSION)|Chiedi sempre (Rileva DE disponibili sul server al collegamento) - Consigliato|Rilevamento Automatico (Avvia il primo DE trovato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell e App Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Sessione Grafica X11 (SSH Forwarding con Xwayland)|Terminale Remoto (Rilevamento Automatico)|File Manager Remoto|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
         --separator="|" 2>/dev/null) || f_status=$?
 
     if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
@@ -648,6 +650,7 @@ form_edit_connection() {
 
     case "$sess_label" in
         *"Mantieni"*) ;;
+        *"Chiedi sempre"*) session_code="ask" ;;
         *"Rilevamento Automatico"*) session_code="auto" ;;
         *"Cinnamon"*) session_code="cinnamon" ;;
         *"GNOME Desktop"*) session_code="gnome" ;;
@@ -665,6 +668,7 @@ form_edit_connection() {
         *"Weston"*) session_code="weston" ;;
         *"X11"*) session_code="x11" ;;
         *"Terminale Remoto"*) session_code="terminal" ;;
+        *"File Manager"*) session_code="files" ;;
         *"Ghostty"*) session_code="ghostty" ;;
         *"Kitty"*) session_code="kitty" ;;
         *"Alacritty"*) session_code="alacritty" ;;
@@ -778,7 +782,7 @@ connect_manual() {
     remote_pass=$(zenity --password --title="Password SSH" --text="Inserisci la password per <b>${remote_user}@${remote_ip}</b>:\n<i>(Lascia vuoto se hai già configurato la chiave SSH pubblica)</i>" 2>/dev/null) || p_status=$?
     if [ "$p_status" -ne 0 ]; then return 1; fi
 
-    launch_session "$remote_ip" "$remote_user" "$remote_pass" "auto" ""
+    launch_session "$remote_ip" "$remote_user" "$remote_pass" "ask" ""
     return $?
 }
 
@@ -874,7 +878,7 @@ EOF
         -o NumberOfPasswordPrompts=1
         -o Compression=no
         -o Ciphers=aes128-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
-        -o IPQoS=lowdelay
+        -o IPQoS=none
         -o TCPKeepAlive=yes
         -o ServerAliveInterval=15
     )
@@ -957,8 +961,168 @@ echo "WAYPIPE=$has_waypipe;WP_VIDEO=$has_wp_video;XWLS=$has_xwls;WAYLAND_SESS=$h
         is_lan=1
     fi
 
+    # 2.1 RILEVAMENTO DINAMICO DEI DESKTOP ENVIRONMENT INSTALLATI SUL SERVER
+    if [ "$session_choice" = "ask" ] || [ "$session_choice" = "auto" ] || [ -z "$session_choice" ]; then
+        local de_probe_cmd='python3 -c "
+import os, glob, shutil
+results = []
+seen = set()
+
+# 1. Sessioni Wayland da file .desktop
+for p in [\"/usr/share/wayland-sessions/*.desktop\", \"/usr/local/share/wayland-sessions/*.desktop\"]:
+    for f in sorted(glob.glob(p)):
+        bn = os.path.splitext(os.path.basename(f))[0].lower()
+        name = bn
+        try:
+            with open(f, encoding=\"utf-8\", errors=\"ignore\") as fp:
+                for line in fp:
+                    if line.startswith(\"Name=\"):
+                        name = line.strip().split(\"=\", 1)[1]
+                        break
+        except:
+            pass
+        code = bn
+        if \"gnome\" in bn:
+            code = \"gnome\"
+            desc = \"Desktop GNOME (Applicazioni e Shell Wayland)\"
+        elif \"niri\" in bn:
+            code = \"niri-desktop\"
+            desc = \"Desktop Niri (Compositor a Scorrimento con barra DMS)\"
+        elif \"plasma\" in bn or \"kde\" in bn:
+            code = \"plasma\"
+            desc = \"Desktop KDE Plasma (KWin Wayland)\"
+        elif \"cosmic\" in bn:
+            code = \"cosmic\"
+            desc = \"Desktop COSMIC (Pop!_OS Wayland)\"
+        elif \"sway\" in bn:
+            code = \"sway\"
+            desc = \"Compositor Sway (Tiling i3 Wayland)\"
+        elif \"hyprland\" in bn:
+            code = \"hyprland\"
+            desc = \"Compositor Hyprland (Tiling dinamico)\"
+        elif \"cinnamon\" in bn:
+            code = \"cinnamon\"
+            desc = \"Desktop Cinnamon (Wayland)\"
+        elif \"labwc\" in bn:
+            code = \"labwc\"
+            desc = \"Compositor Labwc (Stile Openbox Wayland)\"
+        elif \"wayfire\" in bn:
+            code = \"wayfire\"
+            desc = \"Compositor Wayfire (Effetti 3D Compiz)\"
+        elif \"river\" in bn:
+            code = \"river\"
+            desc = \"Compositor River (Tiling Wayland)\"
+        else:
+            desc = f\"Sessione Wayland ({name})\"
+        if code not in seen:
+            seen.add(code)
+            results.append((code, name, desc))
+
+# 2. Compositor standalone installati
+if \"niri-desktop\" not in seen and shutil.which(\"niri\"):
+    seen.add(\"niri-desktop\")
+    results.append((\"niri-desktop\", \"Niri\", \"Desktop Niri (Compositor a Scorrimento)\"))
+if \"sway\" not in seen and shutil.which(\"sway\"):
+    seen.add(\"sway\")
+    results.append((\"sway\", \"Sway\", \"Compositor Sway (Tiling Wayland)\"))
+if \"hyprland\" not in seen and (shutil.which(\"Hyprland\") or shutil.which(\"hyprland\")):
+    seen.add(\"hyprland\")
+    results.append((\"hyprland\", \"Hyprland\", \"Compositor Hyprland\"))
+
+# 3. Sessioni X11 (.desktop)
+for p in [\"/usr/share/xsessions/*.desktop\", \"/usr/local/share/xsessions/*.desktop\"]:
+    for f in sorted(glob.glob(p)):
+        bn = os.path.splitext(os.path.basename(f))[0].lower()
+        if bn not in seen and f\"x11-{bn}\" not in seen:
+            name = bn
+            try:
+                with open(f, encoding=\"utf-8\", errors=\"ignore\") as fp:
+                    for line in fp:
+                        if line.startswith(\"Name=\"):
+                            name = line.strip().split(\"=\", 1)[1]
+                            break
+            except:
+                pass
+            seen.add(bn)
+            results.append((f\"x11-{bn}\", name, f\"Sessione X11 ({name})\"))
+
+# 4. Terminale Remoto ad alte prestazioni
+for t in [\"ghostty\", \"kitty\", \"alacritty\", \"foot\", \"ptyxis\", \"wezterm\", \"gnome-terminal\", \"konsole\", \"xfce4-terminal\", \"xterm\"]:
+    if shutil.which(t):
+        results.append((\"terminal\", f\"Terminale Remoto ({t})\", \"Finestra singola ad altissime prestazioni\"))
+        break
+
+# 5. File Manager Remoto
+for m in [\"nautilus\", \"nemo\", \"dolphin\", \"thunar\", \"pcmanfm\"]:
+    if shutil.which(m):
+        results.append((\"files\", f\"File Manager Remoto ({m})\", \"Esploratore file remoto ad alte prestazioni\"))
+        break
+
+# 6. Comando personalizzato
+results.append((\"custom\", \"Comando Personalizzato...\", \"Esegui un comando o applicazione a scelta\"))
+
+for r in results:
+    print(f\"{r[0]}||{r[1]}||{r[2]}\")
+" 2>/dev/null'
+
+        local de_probe_res
+        de_probe_res=$(export SSH_ASKPASS="$askpass_script" SSH_ASKPASS_REQUIRE="force"; \
+            ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$de_probe_cmd" 2>/dev/null || true)
+
+        if [ -n "$de_probe_res" ]; then
+            local count_de=0
+            local zenity_list_args=()
+            local is_first=1
+            while IFS= read -r rline; do
+                [ -z "$rline" ] && continue
+                count_de=$((count_de + 1))
+                local d_code="" d_name="" d_desc=""
+                d_code=$(echo "$rline" | awk -F'||' '{print $1}')
+                d_name=$(echo "$rline" | awk -F'||' '{print $2}')
+                d_desc=$(echo "$rline" | awk -F'||' '{print $3}')
+                if [ "$is_first" -eq 1 ]; then
+                    zenity_list_args+=("TRUE" "$d_code" "$d_name" "$d_desc")
+                    is_first=0
+                else
+                    zenity_list_args+=("FALSE" "$d_code" "$d_name" "$d_desc")
+                fi
+            done <<< "$de_probe_res"
+
+            # Se richiesto "ask", o se ci sono più opzioni desktop e "auto" richiede scelta:
+            if [ "$session_choice" = "ask" ] || [ "$count_de" -gt 1 ]; then
+                local user_selected=""
+                local u_sel_status=0
+                user_selected=$(zenity --list --radiolist \
+                    --title="WayRemote - Selezione Desktop per $remote_ip" \
+                    --text="<b>Computer Remoto:</b> ${remote_user}@${remote_ip}\n\n<b>Ambienti Desktop rilevati sul server:</b>\nSeleziona l'ambiente o la sessione che desideri avviare:" \
+                    --column="Scelta" --column="Codice" --column="Ambiente Desktop" --column="Descrizione / Modalità" \
+                    --hide-column=2 \
+                    "${zenity_list_args[@]}" \
+                    --ok-label="Avvia Sessione" --cancel-label="Annulla" \
+                    --width=640 --height=400 2>/dev/null) || u_sel_status=$?
+
+                if [ "$u_sel_status" -ne 0 ] || [ -z "$user_selected" ]; then
+                    rm -f "$askpass_script"
+                    return 0
+                fi
+
+                session_choice="$user_selected"
+
+                if [ "$session_choice" = "custom" ]; then
+                    custom_cmd=$(zenity --entry --title="Comando Personalizzato" \
+                        --text="Inserisci il comando o l'applicazione da eseguire sul server:" \
+                        --entry-text="nautilus" 2>/dev/null || true)
+                    if [ -z "$custom_cmd" ]; then
+                        rm -f "$askpass_script"
+                        return 0
+                    fi
+                fi
+            fi
+        fi
+    fi
+
     local conn_mode="wayland"
-    if [ "$session_choice" = "x11" ]; then
+    if [ "$session_choice" = "x11" ] || [[ "$session_choice" =~ ^x11- ]]; then
         conn_mode="x11"
     elif [ "$srv_waypipe" -eq 1 ] && ( [ "$srv_wayland_sess" -eq 1 ] || [ "$srv_wayland_bin" -eq 1 ] ); then
         conn_mode="wayland"
@@ -1476,7 +1640,7 @@ fi
                 ;;
             niri-desktop)
                 local niri_script='
-# Ottimizzazioni Ambiente WayRemote
+# Ottimizzazioni Ambiente WayRemote: disabilita VSync bloccante e accelerazione
 export NO_AT_SPI=1
 export GTK_A11Y=none
 export QT_ACCESSIBILITY=0
@@ -1488,6 +1652,8 @@ export ELECTRON_OZONE_PLATFORM_HINT="auto"
 export CHROME_OZONE_PLATFORM_HINT="auto"
 export MOZ_ENABLE_WAYLAND=1
 export _JAVA_AWT_WM_NONREPARENTING=1
+export vblank_mode=0
+export MESA_VK_WSI_PRESENT_MODE=immediate
 
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     bus_cand="/run/user/$(id -u)/bus"
@@ -1524,6 +1690,14 @@ fi
 term_bin="${term_bin:-xterm}"
 
 cat << EOF_KDL >> "$RUN_CFG"
+// Ottimizzazioni Desktop Remoto a Bassa Latenza (Elimina scatti di animazione su rete)
+animations {
+    off
+}
+prefer-no-csd
+cursor {
+    hide-when-typing
+}
 binds {
     Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
     Mod+Return { spawn "$term_bin"; }
@@ -1536,7 +1710,74 @@ exec niri --config "$RUN_CFG" -- sh -c "if command -v xwayland-satellite >/dev/n
                 remote_cmd="bash -c \"echo '$b64_niri' | base64 -d | bash\""
                 ;;
             gnome)
-                remote_cmd="gnome-shell --wayland"
+                local gnome_script='
+export NO_AT_SPI=1
+export GTK_A11Y=none
+export QT_ACCESSIBILITY=0
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+export XDG_CURRENT_DESKTOP="GNOME"
+export DESKTOP_SESSION="gnome"
+export XDG_SESSION_TYPE="wayland"
+export vblank_mode=0
+export MESA_VK_WSI_PRESENT_MODE=immediate
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    if [ -S "$bus_cand" ]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+    elif command -v dbus-launch >/dev/null 2>&1; then
+        eval "$(dbus-launch --sh-syntax 2>/dev/null)"
+    fi
+fi
+
+term_bin=""
+for cand_t in ghostty ptyxis gnome-terminal kitty alacritty foot xterm; do
+    if command -v "$cand_t" >/dev/null 2>&1; then term_bin="$cand_t"; break; fi
+done
+
+fm_bin=""
+for cand_fm in nautilus nemo thunar dolphin; do
+    if command -v "$cand_fm" >/dev/null 2>&1; then fm_bin="$cand_fm"; break; fi
+done
+
+if [ -n "$fm_bin" ]; then
+    "$fm_bin" &
+fi
+if command -v gnome-control-center >/dev/null 2>&1; then
+    gnome-control-center &
+fi
+if [ -n "$term_bin" ]; then
+    exec "$term_bin"
+else
+    exec xterm
+fi
+'
+                local b64_gnome
+                b64_gnome=$(echo "$gnome_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_gnome' | base64 -d | bash\""
+                ;;
+            files)
+                local files_script='
+export NO_AT_SPI=1
+export GTK_A11Y=none
+export QT_ACCESSIBILITY=0
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+export vblank_mode=0
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    [ -S "$bus_cand" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+fi
+fm_bin=""
+for cand_fm in nautilus nemo thunar dolphin pcmanfm caja; do
+    if command -v "$cand_fm" >/dev/null 2>&1; then fm_bin="$cand_fm"; break; fi
+done
+exec "${fm_bin:-nautilus}"
+'
+                local b64_files
+                b64_files=$(echo "$files_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_files' | base64 -d | bash\""
                 ;;
             plasma)
                 remote_cmd="kwin_wayland --xwayland"
@@ -1717,9 +1958,9 @@ exec '"$target_cmd"'
         esac
     fi
 
-    # Garantisci che qualsiasi comando remoto erediti l'ambiente ottimizzato (evita freeze D-Bus/AT-SPI)
+    # Garantisci che qualsiasi comando remoto erediti l'ambiente ottimizzato (evita freeze D-Bus/AT-SPI e doppio vsync)
     if [[ ! "$remote_cmd" =~ ^bash\ -c ]]; then
-        local raw_wrap="export NO_AT_SPI=1; export GTK_A11Y=none; export QT_ACCESSIBILITY=0; export GDK_BACKEND='wayland,x11,*'; export QT_QPA_PLATFORM='wayland;xcb'; export CLUTTER_BACKEND='wayland'; export SDL_VIDEODRIVER='wayland'; export ELECTRON_OZONE_PLATFORM_HINT='auto'; export CHROME_OZONE_PLATFORM_HINT='auto'; export MOZ_ENABLE_WAYLAND=1; export _JAVA_AWT_WM_NONREPARENTING=1; [ -z \"\$DBUS_SESSION_BUS_ADDRESS\" ] && [ -S \"/run/user/\$(id -u)/bus\" ] && export DBUS_SESSION_BUS_ADDRESS=\"unix:path=/run/user/\$(id -u)/bus\"; "
+        local raw_wrap="export NO_AT_SPI=1; export GTK_A11Y=none; export QT_ACCESSIBILITY=0; export GDK_BACKEND='wayland,x11,*'; export QT_QPA_PLATFORM='wayland;xcb'; export CLUTTER_BACKEND='wayland'; export SDL_VIDEODRIVER='wayland'; export ELECTRON_OZONE_PLATFORM_HINT='auto'; export CHROME_OZONE_PLATFORM_HINT='auto'; export MOZ_ENABLE_WAYLAND=1; export _JAVA_AWT_WM_NONREPARENTING=1; export vblank_mode=0; export MESA_VK_WSI_PRESENT_MODE=immediate; [ -z \"\$DBUS_SESSION_BUS_ADDRESS\" ] && [ -S \"/run/user/\$(id -u)/bus\" ] && export DBUS_SESSION_BUS_ADDRESS=\"unix:path=/run/user/\$(id -u)/bus\"; "
         remote_cmd="bash -c \"${raw_wrap} exec ${remote_cmd}\""
     fi
 
@@ -1757,24 +1998,24 @@ exec '"$target_cmd"'
 
                 if [ "$can_use_video" -eq 1 ]; then
                     echo "==> [WayRemote] Accelerazione GPU Hardware (Video H.264 via VA-API/NVENC) attiva" >> "$session_log"
-                    # Tentativo 1 (LAN): Hardware Video Encoding H.264 con bitrate ottimizzato per LAN
-                    if waypipe --threads=0 --video=h264,hw,bpf=800000 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                    # Tentativo 1 (LAN/Wi-Fi): Hardware Video Encoding H.264 con bitrate controllato (previene bufferbloat Wi-Fi)
+                    if waypipe --threads=0 --video=h264,hw,bpf=300000 -c lz4 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
                         exit 0
                     fi
 
-                    # Tentativo 2 (LAN): Software Video Encoding H.264 fallback
-                    if waypipe --threads=0 --video=h264,bpf=600000 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                    # Tentativo 2 (LAN/Wi-Fi): Software Video Encoding H.264 fallback
+                    if waypipe --threads=0 --video=h264,bpf=250000 -c lz4 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
                         exit 0
                     fi
                 fi
 
-                # Tentativo 3 (LAN): Fallback compressione LZ4 (se video non supportato)
-                if waypipe --threads=0 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                # Tentativo 3 (LAN/Wi-Fi): Fallback compressione rapida standard LZ4
+                if waypipe --threads=0 -c lz4 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
                     exit 0
                 fi
 
-                # Tentativo 4 (LAN): Fallback memoria software senza GPU
-                if waypipe --threads=0 --no-gpu -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                # Tentativo 4 (LAN/Wi-Fi): Fallback memoria software senza GPU
+                if waypipe --threads=0 --no-gpu -c lz4 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
                     exit 0
                 fi
             else
@@ -1782,12 +2023,12 @@ exec '"$target_cmd"'
 
                 if [ "$can_use_video" -eq 1 ]; then
                     # Tentativo 1 (WAN): Video H.264 HW con bitrate controllato (~15 Mbps)
-                    if waypipe --threads=0 --video=h264,hw,bpf=250000 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                    if waypipe --threads=0 --video=h264,hw,bpf=250000 -c lz4 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
                         exit 0
                     fi
 
                     # Tentativo 2 (WAN): Video H.264 SW con bitrate controllato
-                    if waypipe --threads=0 --video=h264,bpf=200000 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                    if waypipe --threads=0 --video=h264,bpf=180000 -c lz4 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
                         exit 0
                     fi
                 fi

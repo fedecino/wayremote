@@ -12,9 +12,10 @@ CONFIG_DIR = os.path.expanduser("~/.config/wayremote")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "connections.json")
 
 SESSION_PRESETS = {
-    "auto": "Rilevamento Automatico (Wayland o X11 - Consigliato)",
+    "ask": "Chiedi sempre (Rileva DE disponibili sul server al collegamento) - Consigliato",
+    "auto": "Rilevamento Automatico (Avvia il primo DE trovato)",
     "cinnamon": "Cinnamon Desktop (Linux Mint Wayland)",
-    "gnome": "GNOME Desktop (Shell Wayland)",
+    "gnome": "GNOME Desktop (Shell e App Wayland)",
     "plasma": "KDE Plasma (KWin Wayland)",
     "cosmic": "COSMIC Desktop (Pop!_OS Wayland)",
     "niri-desktop": "Niri (Desktop Completo con Barra DMS)",
@@ -29,6 +30,7 @@ SESSION_PRESETS = {
     "weston": "Weston Compositor",
     "x11": "Sessione Grafica X11 (SSH Forwarding con Xwayland)",
     "terminal": "Terminale Remoto (Rilevamento Automatico)",
+    "files": "File Manager Remoto",
     "ghostty": "Terminale Ghostty Remoto",
     "kitty": "Terminale Kitty Remoto",
     "alacritty": "Terminale Alacritty Remoto",
@@ -59,14 +61,14 @@ def save_connections(conns):
 def init_defaults():
     conns = load_connections()
     if not conns:
-        # Pre-popola una voce di default con rilevamento automatico DE
+        # Pre-popola una voce di default con rilevamento e scelta DE
         conns = [
             {
                 "id": "1",
                 "name": "ThinkPad Ufficio",
                 "host": "192.168.4.162",
                 "user": "fede",
-                "session": "auto",
+                "session": "ask",
                 "custom_cmd": ""
             }
         ]
