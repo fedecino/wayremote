@@ -417,7 +417,8 @@ flow_client() {
             list_args+=("$line")
         done < <(python3 "$CONNECTIONS_PY" list)
 
-        local action_out
+        local action_out=""
+        local zenity_status=0
         action_out=$(zenity --list \
             --title="WayRemote - Gestione Connessioni Desktop Remoto" \
             --text="<b>Computer Remoti Memorizzati:</b>\nSeleziona una connessione e premi <b>Connetti</b> (o fai doppio clic):" \
@@ -429,26 +430,42 @@ flow_client() {
             --extra-button="Modifica" \
             --extra-button="Elimina" \
             --extra-button="Connessione Rapida" \
-            --height=380 --width=720 2>/dev/null) || return 0
+            --height=380 --width=720 2>/dev/null) || zenity_status=$?
+
+        # Se l'utente ha cliccato Chiudi o chiuso la finestra con la X
+        if [ "$zenity_status" -ne 0 ] && [ -z "$action_out" ]; then
+            return 0
+        fi
+
+        # Se ha premuto Connetti ma non ha selezionato alcuna riga
+        if [ "$zenity_status" -eq 0 ] && [ -z "$action_out" ]; then
+            zenity --info --title="Nessuna Selezione" \
+                --text="Seleziona un computer remoto dalla lista prima di cliccare <b>Connetti</b>." \
+                --width=380 2>/dev/null || true
+            continue
+        fi
 
         case "$action_out" in
-            "+ Nuovo")
+            *"+ Nuovo"*)
                 form_add_connection
                 ;;
-            "Modifica")
+            *"Modifica"*)
                 form_edit_connection
                 ;;
-            "Elimina")
+            *"Elimina"*)
                 form_delete_connection
                 ;;
-            "Connessione Rapida")
-                connect_quick
-                return
+            *"Connessione Rapida"*)
+                if connect_quick; then
+                    return 0
+                fi
                 ;;
             *)
+                # È stato selezionato un ID riga e premuto Connetti (o doppio clic)
                 if [ -n "$action_out" ]; then
-                    connect_profile "$action_out"
-                    return
+                    if connect_profile "$action_out"; then
+                        return 0
+                    fi
                 fi
                 ;;
         esac
@@ -457,7 +474,8 @@ flow_client() {
 
 # Form Aggiungi Connessione
 form_add_connection() {
-    local form_res
+    local form_res=""
+    local f_status=0
     form_res=$(zenity --forms \
         --title="Aggiungi Computer Remoto" \
         --text="Inserisci i dati per memorizzare il nuovo client/server:" \
@@ -465,8 +483,12 @@ form_add_connection() {
         --add-entry="Indirizzo IP o Host (es. 192.168.4.162)" \
         --add-entry="Nome Utente (es. $USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Niri (Desktop Completo con Barra DMS)|Niri (Finestra Semplice)|Terminale Kitty|Terminale Alacritty|Terminale Ghostty|Terminale Foot|Sway Compositor|Labwc Compositor|Comando Personalizzato" \
-        --separator="|" 2>/dev/null) || return 0
+        --combo-values="Rilevamento Automatico DE (Consigliato)|Niri (Desktop Completo con Barra DMS)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|Terminale Kitty|Terminale Alacritty|Terminale Ghostty|Terminale Foot|Comando Personalizzato" \
+        --separator="|" 2>/dev/null) || f_status=$?
+
+    if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
+        return 0
+    fi
 
     local name host user sess_label
     name=$(echo "$form_res" | cut -d'|' -f1)
@@ -475,24 +497,28 @@ form_add_connection() {
     sess_label=$(echo "$form_res" | cut -d'|' -f4)
 
     if [ -z "$name" ] || [ -z "$host" ] || [ -z "$user" ]; then
-        zenity --error --text="I campi Nome, Host e Utente sono obbligatori."
-        return
+        zenity --error --text="I campi Nome, Host e Utente sono obbligatori." 2>/dev/null || true
+        return 0
     fi
 
-    local session_code="niri-desktop"
+    local session_code="auto"
     local custom_cmd=""
     case "$sess_label" in
+        *"Rilevamento Automatico"*) session_code="auto" ;;
         *"Desktop Completo"*) session_code="niri-desktop" ;;
-        *"Finestra Semplice"*) session_code="niri" ;;
+        *"GNOME"*) session_code="gnome" ;;
+        *"Plasma"*) session_code="plasma" ;;
+        *"Sway"*) session_code="sway" ;;
+        *"Hyprland"*) session_code="hyprland" ;;
+        *"Labwc"*) session_code="labwc" ;;
+        *"Wayfire"*) session_code="wayfire" ;;
         *"Kitty"*) session_code="kitty" ;;
         *"Alacritty"*) session_code="alacritty" ;;
         *"Ghostty"*) session_code="ghostty" ;;
         *"Foot"*) session_code="foot" ;;
-        *"Sway"*) session_code="sway" ;;
-        *"Labwc"*) session_code="labwc" ;;
         *"Personalizzato"*)
             session_code="custom"
-            custom_cmd=$(zenity --entry --title="Comando Personalizzato" --text="Inserisci il comando da eseguire sul server:" --entry-text="niri") || return 0
+            custom_cmd=$(zenity --entry --title="Comando Personalizzato" --text="Inserisci il comando da eseguire sul server:" --entry-text="niri" 2>/dev/null || true)
             ;;
     esac
 
@@ -501,63 +527,129 @@ form_add_connection() {
 
 # Form Modifica Connessione
 form_edit_connection() {
-    local edit_id
-    edit_id=$(zenity --entry --title="Modifica Connessione" --text="Inserisci l'ID del computer da modificare:" 2>/dev/null) || return 0
-    if [ -z "$edit_id" ]; then return; fi
+    local list_args=()
+    while IFS= read -r line; do
+        list_args+=("$line")
+    done < <(python3 "$CONNECTIONS_PY" list)
+
+    local edit_id=""
+    local e_status=0
+    edit_id=$(zenity --list \
+        --title="Modifica Connessione" \
+        --text="Seleziona la connessione che desideri modificare:" \
+        --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
+        "${list_args[@]}" \
+        --ok-label="Modifica" --cancel-label="Annulla" \
+        --height=320 --width=680 2>/dev/null) || e_status=$?
+
+    if [ "$e_status" -ne 0 ] || [ -z "$edit_id" ]; then
+        return 0
+    fi
 
     local get_vars
     get_vars=$(python3 "$CONNECTIONS_PY" get "$edit_id" 2>/dev/null) || {
-        zenity --error --text="Profilo con ID $edit_id non trovato."
-        return
+        zenity --error --text="Profilo non trovato." 2>/dev/null || true
+        return 0
     }
     eval "$get_vars"
 
-    local form_res
+    local form_res=""
+    local f_status=0
     form_res=$(zenity --forms \
-        --title="Modifica Connessione #$CONN_ID ($CONN_NAME)" \
-        --text="Modifica i dati del computer remoto:" \
-        --add-entry="Nome Profilo" \
-        --add-entry="Indirizzo IP o Host" \
-        --add-entry="Nome Utente" \
-        --separator="|" 2>/dev/null) || return 0
+        --title="Modifica Connessione: $CONN_NAME" \
+        --text="Modifica i campi desiderati (lascia vuoto per mantenere i valori attuali):" \
+        --add-entry="Nome Profilo (attuale: $CONN_NAME)" \
+        --add-entry="Indirizzo IP o Host (attuale: $CONN_HOST)" \
+        --add-entry="Nome Utente (attuale: $CONN_USER)" \
+        --add-combo="Sessione Remota" \
+        --combo-values="Mantieni attuale ($CONN_SESSION)|Rilevamento Automatico DE (Consigliato)|Niri (Desktop Completo con Barra DMS)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|Terminale Kitty|Terminale Alacritty|Terminale Ghostty|Terminale Foot|Comando Personalizzato" \
+        --separator="|" 2>/dev/null) || f_status=$?
 
-    local name host user
+    if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
+        return 0
+    fi
+
+    local name host user sess_label
     name=$(echo "$form_res" | cut -d'|' -f1)
     host=$(echo "$form_res" | cut -d'|' -f2)
     user=$(echo "$form_res" | cut -d'|' -f3)
+    sess_label=$(echo "$form_res" | cut -d'|' -f4)
 
     [ -z "$name" ] && name="$CONN_NAME"
     [ -z "$host" ] && host="$CONN_HOST"
     [ -z "$user" ] && user="$CONN_USER"
 
-    python3 "$CONNECTIONS_PY" update "$CONN_ID" "$name" "$host" "$user" "$CONN_SESSION" "$CONN_CUSTOM_CMD"
+    local session_code="$CONN_SESSION"
+    local custom_cmd="$CONN_CUSTOM_CMD"
+
+    case "$sess_label" in
+        *"Mantieni"*) ;;
+        *"Rilevamento Automatico"*) session_code="auto" ;;
+        *"Desktop Completo"*) session_code="niri-desktop" ;;
+        *"GNOME"*) session_code="gnome" ;;
+        *"Plasma"*) session_code="plasma" ;;
+        *"Sway"*) session_code="sway" ;;
+        *"Hyprland"*) session_code="hyprland" ;;
+        *"Labwc"*) session_code="labwc" ;;
+        *"Wayfire"*) session_code="wayfire" ;;
+        *"Kitty"*) session_code="kitty" ;;
+        *"Alacritty"*) session_code="alacritty" ;;
+        *"Ghostty"*) session_code="ghostty" ;;
+        *"Foot"*) session_code="foot" ;;
+        *"Personalizzato"*)
+            session_code="custom"
+            custom_cmd=$(zenity --entry --title="Comando Personalizzato" --text="Inserisci il comando da eseguire sul server:" --entry-text="${custom_cmd:-niri}" 2>/dev/null || true)
+            ;;
+    esac
+
+    python3 "$CONNECTIONS_PY" update "$CONN_ID" "$name" "$host" "$user" "$session_code" "$custom_cmd"
 }
 
 # Form Elimina Connessione
 form_delete_connection() {
-    local del_id
-    del_id=$(zenity --entry --title="Elimina Connessione" --text="Inserisci l'ID del computer da eliminare:" 2>/dev/null) || return 0
-    if [ -z "$del_id" ]; then return; fi
+    local list_args=()
+    while IFS= read -r line; do
+        list_args+=("$line")
+    done < <(python3 "$CONNECTIONS_PY" list)
 
-    if zenity --question --title="Conferma Eliminazione" --text="Sei sicuro di voler eliminare la connessione ID #$del_id?" 2>/dev/null; then
+    local del_id=""
+    local d_status=0
+    del_id=$(zenity --list \
+        --title="Elimina Connessione" \
+        --text="Seleziona la connessione che desideri eliminare dalla rubrica:" \
+        --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
+        "${list_args[@]}" \
+        --ok-label="Elimina" --cancel-label="Annulla" \
+        --height=320 --width=680 2>/dev/null) || d_status=$?
+
+    if [ "$d_status" -ne 0 ] || [ -z "$del_id" ]; then
+        return 0
+    fi
+
+    if zenity --question --title="Conferma Eliminazione" --text="Sei sicuro di voler eliminare la connessione selezionata (ID #$del_id)?" 2>/dev/null; then
         python3 "$CONNECTIONS_PY" delete "$del_id"
     fi
 }
 
 # Connessione rapida senza salvare
 connect_quick() {
-    local remote_ip
-    remote_ip=$(zenity --entry --title="Connessione Rapida" --text="Inserisci l'indirizzo IP del server:" --entry-text="192.168.4.162") || return 0
-    if [ -z "$remote_ip" ]; then return; fi
+    local remote_ip=""
+    local r_status=0
+    remote_ip=$(zenity --entry --title="Connessione Rapida" --text="Inserisci l'indirizzo IP del server:" --entry-text="192.168.4.162" 2>/dev/null) || r_status=$?
+    if [ "$r_status" -ne 0 ] || [ -z "$remote_ip" ]; then return 1; fi
 
-    local remote_user
-    remote_user=$(zenity --entry --title="Connessione Rapida" --text="Inserisci il nome utente:" --entry-text="$USER") || return 0
-    if [ -z "$remote_user" ]; then return; fi
+    local remote_user=""
+    local u_status=0
+    remote_user=$(zenity --entry --title="Connessione Rapida" --text="Inserisci il nome utente:" --entry-text="$USER" 2>/dev/null) || u_status=$?
+    if [ "$u_status" -ne 0 ] || [ -z "$remote_user" ]; then return 1; fi
 
-    local remote_pass
-    remote_pass=$(zenity --password --title="Password SSH" --text="Inserisci la password per <b>${remote_user}@${remote_ip}</b>:") || return 0
+    local remote_pass=""
+    local p_status=0
+    remote_pass=$(zenity --password --title="Password SSH" --text="Inserisci la password per <b>${remote_user}@${remote_ip}</b>:\n<i>(Lascia vuoto se hai già configurato la chiave SSH pubblica)</i>" 2>/dev/null) || p_status=$?
+    if [ "$p_status" -ne 0 ]; then return 1; fi
 
-    launch_session "$remote_ip" "$remote_user" "$remote_pass" "niri-desktop" ""
+    launch_session "$remote_ip" "$remote_user" "$remote_pass" "auto" ""
+    return 0
 }
 
 # Connessione a un profilo memorizzato
@@ -565,17 +657,22 @@ connect_profile() {
     local prof_id="$1"
     local get_vars
     get_vars=$(python3 "$CONNECTIONS_PY" get "$prof_id" 2>/dev/null) || {
-        zenity --error --text="Impossibile caricare il profilo selezionato."
+        zenity --error --text="Impossibile caricare il profilo selezionato." 2>/dev/null || true
         return 1
     }
     eval "$get_vars"
 
-    local remote_pass
+    local remote_pass=""
+    local p_status=0
     remote_pass=$(zenity --password \
         --title="WayRemote - Password per ${CONN_NAME}" \
-        --text="Inserisci la password per <b>${CONN_USER}@${CONN_HOST}</b>:\n<i>(Lascia vuoto se hai già configurato la chiave SSH pubblica)</i>") || return 0
+        --text="Inserisci la password per <b>${CONN_USER}@${CONN_HOST}</b>:\n<i>(Lascia vuoto se hai già configurato la chiave SSH pubblica)</i>" 2>/dev/null) || p_status=$?
+    if [ "$p_status" -ne 0 ]; then
+        return 1
+    fi
 
     launch_session "$CONN_HOST" "$CONN_USER" "$remote_pass" "$CONN_SESSION" "$CONN_CUSTOM_CMD"
+    return 0
 }
 
 # Avvio effettivo della sessione Waypipe / SSH
@@ -636,8 +733,91 @@ EOF
     # 2. COSTRUZIONE DEL COMANDO REMOTO
     local remote_cmd=""
     case "$session_choice" in
+        auto|"")
+            # Script intelligente di rilevamento automatico del DE/WM sul server remoto
+            local auto_script='
+sys_env=$(systemctl --user show-environment 2>/dev/null || true)
+xdg_de=$(echo "$sys_env" | grep -E "^XDG_CURRENT_DESKTOP=" | cut -d"=" -f2 | tr "[:upper:]" "[:lower:]" || true)
+sess_de=$(echo "$sys_env" | grep -E "^DESKTOP_SESSION=" | cut -d"=" -f2 | tr "[:upper:]" "[:lower:]" || true)
+
+proc_de=""
+if pgrep -u "$USER" -x niri >/dev/null 2>&1; then proc_de="niri";
+elif pgrep -u "$USER" -x gnome-shell >/dev/null 2>&1; then proc_de="gnome";
+elif pgrep -u "$USER" -x kwin_wayland >/dev/null 2>&1; then proc_de="plasma";
+elif pgrep -u "$USER" -x sway >/dev/null 2>&1; then proc_de="sway";
+elif pgrep -u "$USER" -x Hyprland >/dev/null 2>&1; then proc_de="hyprland";
+elif pgrep -u "$USER" -x labwc >/dev/null 2>&1; then proc_de="labwc";
+elif pgrep -u "$USER" -x wayfire >/dev/null 2>&1; then proc_de="wayfire";
+fi
+
+de=""
+for cand in "$proc_de" "$xdg_de" "$sess_de"; do
+    case "$cand" in
+        *niri*) de="niri"; break ;;
+        *gnome*) de="gnome"; break ;;
+        *plasma*|*kde*) de="plasma"; break ;;
+        *sway*) de="sway"; break ;;
+        *hyprland*) de="hyprland"; break ;;
+        *labwc*) de="labwc"; break ;;
+        *wayfire*) de="wayfire"; break ;;
+    esac
+done
+
+if [ -z "$de" ]; then
+    if [ -f /usr/share/wayland-sessions/niri.desktop ] || command -v niri >/dev/null 2>&1; then de="niri";
+    elif [ -f /usr/share/wayland-sessions/gnome.desktop ] || command -v gnome-shell >/dev/null 2>&1; then de="gnome";
+    elif ls /usr/share/wayland-sessions/*plasma* >/dev/null 2>&1 || command -v kwin_wayland >/dev/null 2>&1; then de="plasma";
+    elif [ -f /usr/share/wayland-sessions/sway.desktop ] || command -v sway >/dev/null 2>&1; then de="sway";
+    elif [ -f /usr/share/wayland-sessions/hyprland.desktop ] || command -v Hyprland >/dev/null 2>&1; then de="hyprland";
+    elif [ -f /usr/share/wayland-sessions/labwc.desktop ] || command -v labwc >/dev/null 2>&1; then de="labwc";
+    elif [ -f /usr/share/wayland-sessions/wayfire.desktop ] || command -v wayfire >/dev/null 2>&1; then de="wayfire";
+    fi
+fi
+
+case "$de" in
+    niri)
+        CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
+        mkdir -p "$CFG_DIR"
+        RUN_CFG="$CFG_DIR/niri_remote_config.kdl"
+        echo "// WayRemote Nested Config" > "$RUN_CFG"
+        if [ -f "$HOME/.config/niri/config.kdl" ]; then
+            echo "include \"$HOME/.config/niri/config.kdl\"" >> "$RUN_CFG"
+        fi
+        cat << "EOF_KDL" >> "$RUN_CFG"
+binds {
+    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+}
+EOF_KDL
+        exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; kitty || alacritty || foot || true"
+        ;;
+    gnome)
+        exec gnome-shell --wayland
+        ;;
+    plasma)
+        exec kwin_wayland --xwayland
+        ;;
+    sway)
+        exec sway
+        ;;
+    hyprland)
+        exec Hyprland
+        ;;
+    labwc)
+        exec labwc
+        ;;
+    wayfire)
+        exec wayfire
+        ;;
+    *)
+        exec kitty || exec alacritty || exec ghostty || exec foot || exec xterm
+        ;;
+esac
+'
+            local b64_auto
+            b64_auto=$(echo "$auto_script" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_auto' | base64 -d | bash\""
+            ;;
         niri-desktop)
-            # Desktop completo Niri con configurazione shortcut mod-key-nested Super e shell DMS / Waybar / Terminale
             local niri_script='
 CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
 mkdir -p "$CFG_DIR"
@@ -647,8 +827,8 @@ if [ -f "$HOME/.config/niri/config.kdl" ]; then
     echo "include \"$HOME/.config/niri/config.kdl\"" >> "$RUN_CFG"
 fi
 cat << "EOF_KDL" >> "$RUN_CFG"
-input {
-    mod-key-nested "Super"
+binds {
+    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
 }
 EOF_KDL
 exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; kitty || alacritty || foot || true"
@@ -657,27 +837,25 @@ exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then 
             b64_niri=$(echo "$niri_script" | base64 -w 0)
             remote_cmd="bash -c \"echo '$b64_niri' | base64 -d | bash\""
             ;;
-        niri)
-            local niri_simple='
-CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
-mkdir -p "$CFG_DIR"
-RUN_CFG="$CFG_DIR/niri_remote_config.kdl"
-echo "// WayRemote Nested Config" > "$RUN_CFG"
-if [ -f "$HOME/.config/niri/config.kdl" ]; then
-    echo "include \"$HOME/.config/niri/config.kdl\"" >> "$RUN_CFG"
-fi
-cat << "EOF_KDL" >> "$RUN_CFG"
-input {
-    mod-key-nested "Super"
-}
-EOF_KDL
-exec niri --config "$RUN_CFG" -- sh -c "sleep 0.2; kitty || alacritty || foot || true"
-'
-            local b64_simple
-            b64_simple=$(echo "$niri_simple" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_simple' | base64 -d | bash\""
+        gnome)
+            remote_cmd="gnome-shell --wayland"
             ;;
-        kitty|alacritty|ghostty|foot|sway|labwc)
+        plasma)
+            remote_cmd="kwin_wayland --xwayland"
+            ;;
+        sway)
+            remote_cmd="sway"
+            ;;
+        hyprland)
+            remote_cmd="Hyprland"
+            ;;
+        labwc)
+            remote_cmd="labwc"
+            ;;
+        wayfire)
+            remote_cmd="wayfire"
+            ;;
+        kitty|alacritty|ghostty|foot)
             remote_cmd="$session_choice"
             ;;
         custom)

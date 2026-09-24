@@ -12,14 +12,18 @@ CONFIG_DIR = os.path.expanduser("~/.config/wayremote")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "connections.json")
 
 SESSION_PRESETS = {
+    "auto": "Rilevamento Automatico DE (Consigliato)",
     "niri-desktop": "Niri (Desktop Completo con Barra DMS)",
-    "niri": "Niri (Finestra Semplice)",
+    "gnome": "GNOME Desktop (Shell Wayland)",
+    "plasma": "KDE Plasma (KWin Wayland)",
+    "sway": "Sway Compositor",
+    "hyprland": "Hyprland Compositor",
+    "labwc": "Labwc Compositor",
+    "wayfire": "Wayfire Compositor",
     "kitty": "Terminale Kitty Remoto",
     "alacritty": "Terminale Alacritty Remoto",
     "ghostty": "Terminale Ghostty Remoto",
     "foot": "Terminale Foot Remoto",
-    "sway": "Sway Compositor",
-    "labwc": "Labwc Compositor",
     "custom": "Comando Personalizzato"
 }
 
@@ -43,14 +47,14 @@ def save_connections(conns):
 def init_defaults():
     conns = load_connections()
     if not conns:
-        # Pre-popola una voce di default comoda per il ThinkPad se non esiste nulla
+        # Pre-popola una voce di default con rilevamento automatico DE
         conns = [
             {
                 "id": "1",
                 "name": "ThinkPad Ufficio",
                 "host": "192.168.4.162",
                 "user": "fede",
-                "session": "niri-desktop",
+                "session": "auto",
                 "custom_cmd": ""
             }
         ]
