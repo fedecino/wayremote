@@ -770,7 +770,7 @@ connect_manual() {
     if [ "$p_status" -ne 0 ]; then return 1; fi
 
     launch_session "$remote_ip" "$remote_user" "$remote_pass" "auto" ""
-    return 0
+    return $?
 }
 
 # Connessione a un profilo memorizzato (NON chiede IP o utente, chiede SOLO la password!)
@@ -793,7 +793,7 @@ connect_profile() {
     fi
 
     launch_session "$CONN_HOST" "$CONN_USER" "$remote_pass" "$CONN_SESSION" "$CONN_CUSTOM_CMD"
-    return 0
+    return $?
 }
 
 # Avvio effettivo della sessione Waypipe / SSH
@@ -804,48 +804,95 @@ launch_session() {
     local session_choice="$4"
     local custom_cmd="$5"
 
-    # Script helper per SSH_ASKPASS
+    # Assicura DISPLAY e WAYLAND_DISPLAY corretti per client Wayland/X11 e dialoghi SSH_ASKPASS
+    if [ -z "${DISPLAY:-}" ]; then
+        for xsock in /tmp/.X11-unix/X*; do
+            if [ -S "$xsock" ]; then
+                disp_num=$(basename "$xsock" | sed 's/^X//')
+                export DISPLAY=":$disp_num"
+                break
+            fi
+        done
+    fi
+    export DISPLAY="${DISPLAY:-:0}"
+
+    local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    export XDG_RUNTIME_DIR="$runtime_dir"
+    if [ -z "${WAYLAND_DISPLAY:-}" ] || [ ! -S "${runtime_dir}/${WAYLAND_DISPLAY}" ]; then
+        for sock in "$runtime_dir"/wayland-*; do
+            if [ -S "$sock" ] && [[ ! "$sock" =~ waypipe ]] && [ -f "${sock}.lock" ]; then
+                export WAYLAND_DISPLAY="$(basename "$sock")"
+                break
+            fi
+        done
+        if [ -z "${WAYLAND_DISPLAY:-}" ] || [ ! -S "${runtime_dir}/${WAYLAND_DISPLAY}" ]; then
+            for sock in "$runtime_dir"/wayland-*; do
+                if [ -S "$sock" ] && [[ ! "$sock" =~ waypipe ]]; then
+                    export WAYLAND_DISPLAY="$(basename "$sock")"
+                    break
+                fi
+            done
+        fi
+    fi
+
+    # Script helper per SSH_ASKPASS (con codifica Base64 per preservare caratteri speciali della password)
     local askpass_script
     askpass_script=$(mktemp /tmp/wayremote_askpass.XXXXXX.sh)
     chmod 700 "$askpass_script"
 
+    local b64_pass=""
+    if [ -n "$remote_pass" ]; then
+        b64_pass=$(printf '%s' "$remote_pass" | base64 -w 0)
+    fi
+
     cat << EOF > "$askpass_script"
 #!/usr/bin/env bash
 PROMPT="\${1:-}"
-SAVED_PASS="$remote_pass"
+SAVED_PASS_B64="$b64_pass"
 
 if echo "\$PROMPT" | grep -qiE "yes/no|fingerprint|authenticity"; then
     echo "yes"
-elif [ -n "\$SAVED_PASS" ]; then
-    echo "\$SAVED_PASS"
+elif [ -n "\$SAVED_PASS_B64" ]; then
+    echo "\$SAVED_PASS_B64" | base64 -d
 else
     zenity --password --title="WayRemote - Autenticazione SSH" --text="\$PROMPT" 2>/dev/null
 fi
 EOF
 
     local SSH_OPTS=(-o IPQoS=none -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -o NumberOfPasswordPrompts=1)
+    if [ -n "$remote_pass" ]; then
+        # Se la password è specificata, forza autenticazione password
+        # ed escludi chiavi pubbliche per evitare "Too many authentication failures" da ssh-agent
+        SSH_OPTS+=(-o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive)
+    else
+        SSH_OPTS+=(-o PreferredAuthentications=publickey,keyboard-interactive,password)
+    fi
 
     # 1. PRE-FLIGHT CHECK: Verifica Connettività e Credenziali SSH
     local check_output
-    check_output=$(export DISPLAY="${DISPLAY:-:0}" SSH_ASKPASS="$askpass_script" SSH_ASKPASS_REQUIRE="force"; \
+    check_output=$(export SSH_ASKPASS="$askpass_script" SSH_ASKPASS_REQUIRE="force"; \
         ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "echo __WAYREMOTE_AUTH_OK__" 2>&1) || {
         
         if echo "$check_output" | grep -qi "Permission denied"; then
             zenity --error --title="Autenticazione Fallita" \
                 --text="<b>Password o Nome Utente non corretti.</b>\n\nImpossibile accedere come utente <b>${remote_user}</b> su <b>${remote_ip}</b>.\nVerifica che la password digitata sia corretta." \
-                --width=460
+                --width=460 2>/dev/null || true
+        elif echo "$check_output" | grep -qi "Too many authentication failures"; then
+            zenity --error --title="Troppi Tentativi con Chiavi SSH" \
+                --text="<b>Il server ha rifiutato la connessione per troppi tentativi con chiavi SSH.</b>\n\nIl tuo ssh-agent contiene molte chiavi che hanno esaurito i tentativi massimi del server.\n\n<b>Soluzione:</b> Inserisci la <b>password</b> quando richiesta per accedere direttamente con password." \
+                --width=500 2>/dev/null || true
         elif echo "$check_output" | grep -qi "Connection refused"; then
             zenity --error --title="Server Non Raggiungibile" \
                 --text="<b>Connessione rifiutata da ${remote_ip}:22.</b>\n\nIl server SSH non risulta in esecuzione sul target.\nSul PC server esegui:\n<tt>sudo systemctl enable --now sshd</tt> (oppure <tt>ssh</tt>)" \
-                --width=480
+                --width=480 2>/dev/null || true
         elif echo "$check_output" | grep -qiE "No route to host|timed out|Could not resolve"; then
             zenity --error --title="Host Non Raggiungibile" \
                 --text="<b>Impossibile raggiungere l'indirizzo IP ${remote_ip}.</b>\n\nVerifica che entrambi i PC siano accesi e collegati alla stessa rete LAN o VPN." \
-                --width=480
+                --width=480 2>/dev/null || true
         else
             zenity --error --title="Errore Connessione SSH" \
                 --text="<b>Errore di connessione verso ${remote_user}@${remote_ip}:</b>\n\n${check_output}" \
-                --width=500
+                --width=500 2>/dev/null || true
         fi
         rm -f "$askpass_script"
         return 1
@@ -853,7 +900,7 @@ EOF
 
     # 2. PROBE AMBIENTE SERVER: Rilevamento automatico Wayland vs X11
     local server_info
-    server_info=$(export DISPLAY="${DISPLAY:-:0}" SSH_ASKPASS="$askpass_script" SSH_ASKPASS_REQUIRE="force"; \
+    server_info=$(export SSH_ASKPASS="$askpass_script" SSH_ASKPASS_REQUIRE="force"; \
         ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" '
 has_waypipe=0; command -v waypipe >/dev/null 2>&1 && has_waypipe=1
 has_wayland_sess=0; ls /usr/share/wayland-sessions/*.desktop >/dev/null 2>&1 && has_wayland_sess=1
@@ -1541,26 +1588,6 @@ exec "$term_bin"
     fi
 
     (
-        export DISPLAY="${DISPLAY:-}"
-        if [ -z "$DISPLAY" ]; then
-            for xsock in /tmp/.X11-unix/X*; do
-                if [ -S "$xsock" ]; then
-                    disp_num=$(basename "$xsock" | sed 's/^X//')
-                    export DISPLAY=":$disp_num"
-                    break
-                fi
-            done
-        fi
-        export DISPLAY="${DISPLAY:-:0}"
-        export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-        if [ -z "${WAYLAND_DISPLAY:-}" ] || [ ! -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
-            for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
-                if [ -S "$sock" ]; then
-                    export WAYLAND_DISPLAY="$(basename "$sock")"
-                    break
-                fi
-            done
-        fi
         export SSH_ASKPASS="$askpass_script"
         export SSH_ASKPASS_REQUIRE="force"
 
@@ -1608,6 +1635,7 @@ exec "$term_bin"
 
     # Pulizia file temporanei
     rm -f "$askpass_script"
+    return "$wp_exit"
 }
 
 # Menu principale interattivo
