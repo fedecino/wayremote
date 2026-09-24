@@ -518,7 +518,7 @@ form_add_connection() {
         --add-entry="Indirizzo IP o Host (es. 192.168.4.162)" \
         --add-entry="Nome Utente (es. $USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Rilevamento Automatico DE (Consigliato)|Niri (Desktop Completo con Barra DMS)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
+        --combo-values="Rilevamento Automatico DE (Consigliato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
         --separator="|" 2>/dev/null) || f_status=$?
 
     if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
@@ -540,20 +540,27 @@ form_add_connection() {
     local custom_cmd=""
     case "$sess_label" in
         *"Rilevamento Automatico"*) session_code="auto" ;;
-        *"Desktop Completo"*) session_code="niri-desktop" ;;
+        *"Cinnamon"*) session_code="cinnamon" ;;
         *"GNOME Desktop"*) session_code="gnome" ;;
         *"Plasma"*) session_code="plasma" ;;
+        *"COSMIC"*) session_code="cosmic" ;;
+        *"Desktop Completo"*|*"Niri"*) session_code="niri-desktop" ;;
         *"Sway"*) session_code="sway" ;;
         *"Hyprland"*) session_code="hyprland" ;;
         *"Labwc"*) session_code="labwc" ;;
         *"Wayfire"*) session_code="wayfire" ;;
+        *"River"*) session_code="river" ;;
+        *"LXQt"*) session_code="lxqt" ;;
+        *"MATE"*) session_code="mate" ;;
+        *"XFCE"*) session_code="xfce" ;;
+        *"Weston"*) session_code="weston" ;;
         *"Terminale Remoto"*) session_code="terminal" ;;
         *"Ghostty"*) session_code="ghostty" ;;
         *"Kitty"*) session_code="kitty" ;;
         *"Alacritty"*) session_code="alacritty" ;;
         *"Foot"*) session_code="foot" ;;
         *"Ptyxis"*) session_code="ptyxis" ;;
-        *"GNOME"*) session_code="gnome-terminal" ;;
+        *"Terminale GNOME"*) session_code="gnome-terminal" ;;
         *"Konsole"*) session_code="konsole" ;;
         *"Personalizzato"*)
             session_code="custom"
@@ -609,7 +616,7 @@ form_edit_connection() {
         --add-entry="Indirizzo IP o Host (attuale: $CONN_HOST)" \
         --add-entry="Nome Utente (attuale: $CONN_USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Mantieni attuale ($CONN_SESSION)|Rilevamento Automatico DE (Consigliato)|Niri (Desktop Completo con Barra DMS)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
+        --combo-values="Mantieni attuale ($CONN_SESSION)|Rilevamento Automatico DE (Consigliato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
         --separator="|" 2>/dev/null) || f_status=$?
 
     if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
@@ -632,20 +639,27 @@ form_edit_connection() {
     case "$sess_label" in
         *"Mantieni"*) ;;
         *"Rilevamento Automatico"*) session_code="auto" ;;
-        *"Desktop Completo"*) session_code="niri-desktop" ;;
+        *"Cinnamon"*) session_code="cinnamon" ;;
         *"GNOME Desktop"*) session_code="gnome" ;;
         *"Plasma"*) session_code="plasma" ;;
+        *"COSMIC"*) session_code="cosmic" ;;
+        *"Desktop Completo"*|*"Niri"*) session_code="niri-desktop" ;;
         *"Sway"*) session_code="sway" ;;
         *"Hyprland"*) session_code="hyprland" ;;
         *"Labwc"*) session_code="labwc" ;;
         *"Wayfire"*) session_code="wayfire" ;;
+        *"River"*) session_code="river" ;;
+        *"LXQt"*) session_code="lxqt" ;;
+        *"MATE"*) session_code="mate" ;;
+        *"XFCE"*) session_code="xfce" ;;
+        *"Weston"*) session_code="weston" ;;
         *"Terminale Remoto"*) session_code="terminal" ;;
         *"Ghostty"*) session_code="ghostty" ;;
         *"Kitty"*) session_code="kitty" ;;
         *"Alacritty"*) session_code="alacritty" ;;
         *"Foot"*) session_code="foot" ;;
         *"Ptyxis"*) session_code="ptyxis" ;;
-        *"GNOME"*) session_code="gnome-terminal" ;;
+        *"Terminale GNOME"*) session_code="gnome-terminal" ;;
         *"Konsole"*) session_code="konsole" ;;
         *"Personalizzato"*)
             session_code="custom"
@@ -841,42 +855,81 @@ EOF
         auto|"")
             # Script intelligente di rilevamento automatico del DE/WM sul server remoto
             local auto_script='
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    [ -S "$bus_cand" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+fi
+
 sys_env=$(systemctl --user show-environment 2>/dev/null || true)
 xdg_de=$(echo "$sys_env" | grep -E "^XDG_CURRENT_DESKTOP=" | cut -d"=" -f2 | tr "[:upper:]" "[:lower:]" || true)
+[ -z "$xdg_de" ] && xdg_de=$(echo "${XDG_CURRENT_DESKTOP:-}" | tr "[:upper:]" "[:lower:]")
 sess_de=$(echo "$sys_env" | grep -E "^DESKTOP_SESSION=" | cut -d"=" -f2 | tr "[:upper:]" "[:lower:]" || true)
+[ -z "$sess_de" ] && sess_de=$(echo "${DESKTOP_SESSION:-}" | tr "[:upper:]" "[:lower:]")
 
 proc_de=""
-if pgrep -u "$USER" -x niri >/dev/null 2>&1; then proc_de="niri";
+if pgrep -u "$USER" -f "cinnamon-session|cinnamon|muffin" >/dev/null 2>&1; then proc_de="cinnamon";
 elif pgrep -u "$USER" -x gnome-shell >/dev/null 2>&1; then proc_de="gnome";
 elif pgrep -u "$USER" -x kwin_wayland >/dev/null 2>&1; then proc_de="plasma";
+elif pgrep -u "$USER" -f "cosmic-comp|cosmic-session" >/dev/null 2>&1; then proc_de="cosmic";
+elif pgrep -u "$USER" -x niri >/dev/null 2>&1; then proc_de="niri";
 elif pgrep -u "$USER" -x sway >/dev/null 2>&1; then proc_de="sway";
-elif pgrep -u "$USER" -x Hyprland >/dev/null 2>&1; then proc_de="hyprland";
+elif pgrep -u "$USER" -i -x hyprland >/dev/null 2>&1; then proc_de="hyprland";
 elif pgrep -u "$USER" -x labwc >/dev/null 2>&1; then proc_de="labwc";
 elif pgrep -u "$USER" -x wayfire >/dev/null 2>&1; then proc_de="wayfire";
+elif pgrep -u "$USER" -x river >/dev/null 2>&1; then proc_de="river";
+elif pgrep -u "$USER" -f "lxqt-session" >/dev/null 2>&1; then proc_de="lxqt";
+elif pgrep -u "$USER" -f "mate-session" >/dev/null 2>&1; then proc_de="mate";
+elif pgrep -u "$USER" -f "xfce4-session" >/dev/null 2>&1; then proc_de="xfce";
+elif pgrep -u "$USER" -x weston >/dev/null 2>&1; then proc_de="weston";
 fi
 
 de=""
 for cand in "$proc_de" "$xdg_de" "$sess_de"; do
     case "$cand" in
-        *niri*) de="niri"; break ;;
+        *cinnamon*|*x-cinnamon*|*mint*) de="cinnamon"; break ;;
         *gnome*) de="gnome"; break ;;
         *plasma*|*kde*) de="plasma"; break ;;
+        *cosmic*) de="cosmic"; break ;;
+        *niri*) de="niri"; break ;;
         *sway*) de="sway"; break ;;
         *hyprland*) de="hyprland"; break ;;
         *labwc*) de="labwc"; break ;;
         *wayfire*) de="wayfire"; break ;;
+        *river*) de="river"; break ;;
+        *lxqt*) de="lxqt"; break ;;
+        *mate*) de="mate"; break ;;
+        *xfce*) de="xfce"; break ;;
+        *weston*) de="weston"; break ;;
     esac
 done
 
+desktop_session_file=""
 if [ -z "$de" ]; then
-    if [ -f /usr/share/wayland-sessions/niri.desktop ] || command -v niri >/dev/null 2>&1; then de="niri";
-    elif [ -f /usr/share/wayland-sessions/gnome.desktop ] || command -v gnome-shell >/dev/null 2>&1; then de="gnome";
+    if ls /usr/share/wayland-sessions/*cinnamon*.desktop >/dev/null 2>&1 || command -v cinnamon-session >/dev/null 2>&1 || command -v muffin >/dev/null 2>&1; then de="cinnamon";
+    elif [ -f /usr/share/wayland-sessions/niri.desktop ] || command -v niri >/dev/null 2>&1; then de="niri";
+    elif [ -f /usr/share/wayland-sessions/gnome.desktop ] || [ -f /usr/share/wayland-sessions/gnome-wayland.desktop ] || command -v gnome-shell >/dev/null 2>&1; then de="gnome";
     elif ls /usr/share/wayland-sessions/*plasma* >/dev/null 2>&1 || command -v kwin_wayland >/dev/null 2>&1; then de="plasma";
+    elif ls /usr/share/wayland-sessions/*cosmic*.desktop >/dev/null 2>&1 || command -v cosmic-session >/dev/null 2>&1; then de="cosmic";
     elif [ -f /usr/share/wayland-sessions/sway.desktop ] || command -v sway >/dev/null 2>&1; then de="sway";
-    elif [ -f /usr/share/wayland-sessions/hyprland.desktop ] || command -v Hyprland >/dev/null 2>&1; then de="hyprland";
+    elif [ -f /usr/share/wayland-sessions/hyprland.desktop ] || command -v Hyprland >/dev/null 2>&1 || command -v hyprland >/dev/null 2>&1; then de="hyprland";
     elif [ -f /usr/share/wayland-sessions/labwc.desktop ] || command -v labwc >/dev/null 2>&1; then de="labwc";
     elif [ -f /usr/share/wayland-sessions/wayfire.desktop ] || command -v wayfire >/dev/null 2>&1; then de="wayfire";
+    elif [ -f /usr/share/wayland-sessions/river.desktop ] || command -v river >/dev/null 2>&1; then de="river";
+    elif ls /usr/share/wayland-sessions/*lxqt*.desktop >/dev/null 2>&1 || command -v lxqt-session >/dev/null 2>&1; then de="lxqt";
+    elif ls /usr/share/wayland-sessions/*mate*.desktop >/dev/null 2>&1 || command -v mate-session >/dev/null 2>&1; then de="mate";
+    elif ls /usr/share/wayland-sessions/*xfce*.desktop >/dev/null 2>&1 || command -v xfce4-session >/dev/null 2>&1; then de="xfce";
+    elif [ -f /usr/share/wayland-sessions/weston.desktop ] || command -v weston >/dev/null 2>&1; then de="weston";
     fi
+fi
+
+if [ -z "$de" ]; then
+    for df in /usr/share/wayland-sessions/*.desktop /usr/local/share/wayland-sessions/*.desktop; do
+        if [ -f "$df" ]; then
+            de="desktop-session"
+            desktop_session_file="$df"
+            break
+        fi
+    done
 fi
 
 # Rilevamento automatico di qualsiasi emulatore di terminale presente sul server
@@ -898,6 +951,74 @@ fi
 term_bin="${term_bin:-xterm}"
 
 case "$de" in
+    cinnamon)
+        export XDG_CURRENT_DESKTOP="X-Cinnamon"
+        export DESKTOP_SESSION="cinnamon-wayland"
+        export XDG_SESSION_TYPE="wayland"
+        export GDK_BACKEND="wayland,x11,*"
+        export QT_QPA_PLATFORM="wayland;xcb"
+        for cf in /usr/share/wayland-sessions/*cinnamon*.desktop /usr/local/share/wayland-sessions/*cinnamon*.desktop; do
+            if [ -f "$cf" ]; then
+                cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+                if [ -n "$cmd" ]; then
+                    exec $cmd
+                fi
+            fi
+        done
+        if command -v cinnamon-session-wayland >/dev/null 2>&1; then
+            exec cinnamon-session-wayland
+        elif command -v cinnamon-session >/dev/null 2>&1; then
+            exec cinnamon-session --session cinnamon-wayland
+        elif command -v muffin >/dev/null 2>&1; then
+            exec muffin --wayland
+        elif command -v cinnamon >/dev/null 2>&1; then
+            exec cinnamon --wayland
+        else
+            exec cinnamon
+        fi
+        ;;
+    gnome)
+        export XDG_CURRENT_DESKTOP="GNOME"
+        export DESKTOP_SESSION="gnome"
+        export XDG_SESSION_TYPE="wayland"
+        for cf in /usr/share/wayland-sessions/*gnome*.desktop; do
+            if [ -f "$cf" ]; then
+                cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+                [ -n "$cmd" ] && exec $cmd
+            fi
+        done
+        if command -v gnome-shell >/dev/null 2>&1; then
+            exec gnome-shell --wayland
+        elif command -v gnome-session >/dev/null 2>&1; then
+            exec gnome-session
+        fi
+        ;;
+    plasma)
+        export XDG_CURRENT_DESKTOP="KDE"
+        export DESKTOP_SESSION="plasmawayland"
+        export XDG_SESSION_TYPE="wayland"
+        if command -v kwin_wayland >/dev/null 2>&1; then
+            exec kwin_wayland --xwayland
+        elif command -v startplasma-wayland >/dev/null 2>&1; then
+            exec startplasma-wayland
+        fi
+        ;;
+    cosmic)
+        export XDG_CURRENT_DESKTOP="COSMIC"
+        export DESKTOP_SESSION="cosmic"
+        export XDG_SESSION_TYPE="wayland"
+        for cf in /usr/share/wayland-sessions/*cosmic*.desktop; do
+            if [ -f "$cf" ]; then
+                cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+                [ -n "$cmd" ] && exec $cmd
+            fi
+        done
+        if command -v cosmic-session >/dev/null 2>&1; then
+            exec cosmic-session
+        elif command -v cosmic-comp >/dev/null 2>&1; then
+            exec cosmic-comp
+        fi
+        ;;
     niri)
         CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
         mkdir -p "$CFG_DIR"
@@ -914,17 +1035,15 @@ binds {
 EOF_KDL
         exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; if [ -n \"$term_bin\" ] && command -v \"$term_bin\" >/dev/null 2>&1; then \"$term_bin\" & fi; true"
         ;;
-    gnome)
-        exec gnome-shell --wayland
-        ;;
-    plasma)
-        exec kwin_wayland --xwayland
-        ;;
     sway)
         exec sway
         ;;
     hyprland)
-        exec Hyprland
+        if command -v Hyprland >/dev/null 2>&1; then
+            exec Hyprland
+        else
+            exec hyprland
+        fi
         ;;
     labwc)
         exec labwc
@@ -932,7 +1051,69 @@ EOF_KDL
     wayfire)
         exec wayfire
         ;;
+    river)
+        exec river
+        ;;
+    lxqt)
+        export XDG_CURRENT_DESKTOP="LXQt"
+        export DESKTOP_SESSION="lxqt"
+        export XDG_SESSION_TYPE="wayland"
+        for cf in /usr/share/wayland-sessions/*lxqt*.desktop; do
+            if [ -f "$cf" ]; then
+                cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+                [ -n "$cmd" ] && exec $cmd
+            fi
+        done
+        exec lxqt-session
+        ;;
+    mate)
+        export XDG_CURRENT_DESKTOP="MATE"
+        export DESKTOP_SESSION="mate"
+        export XDG_SESSION_TYPE="wayland"
+        for cf in /usr/share/wayland-sessions/*mate*.desktop; do
+            if [ -f "$cf" ]; then
+                cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+                [ -n "$cmd" ] && exec $cmd
+            fi
+        done
+        exec mate-session
+        ;;
+    xfce)
+        export XDG_CURRENT_DESKTOP="XFCE"
+        export DESKTOP_SESSION="xfce"
+        export XDG_SESSION_TYPE="wayland"
+        for cf in /usr/share/wayland-sessions/*xfce*.desktop; do
+            if [ -f "$cf" ]; then
+                cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+                [ -n "$cmd" ] && exec $cmd
+            fi
+        done
+        exec xfce4-session
+        ;;
+    weston)
+        exec weston
+        ;;
+    desktop-session)
+        if [ -n "$desktop_session_file" ] && [ -f "$desktop_session_file" ]; then
+            cmd=$(grep -E "^Exec=" "$desktop_session_file" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+            if [ -n "$cmd" ]; then
+                exec $cmd
+            fi
+        fi
+        exec "$term_bin"
+        ;;
     *)
+        for df in /usr/share/wayland-sessions/*.desktop /usr/local/share/wayland-sessions/*.desktop; do
+            if [ -f "$df" ]; then
+                exec_cand=$(grep -E "^Exec=" "$df" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+                if [ -n "$exec_cand" ]; then
+                    bin_cand=$(echo "$exec_cand" | awk "{print \$1}")
+                    if command -v "$bin_cand" >/dev/null 2>&1; then
+                        exec $exec_cand
+                    fi
+                fi
+            fi
+        done
         exec "$term_bin"
         ;;
 esac
@@ -940,6 +1121,62 @@ esac
             local b64_auto
             b64_auto=$(echo "$auto_script" | base64 -w 0)
             remote_cmd="bash -c \"echo '$b64_auto' | base64 -d | bash\""
+            ;;
+        cinnamon)
+            local cin_script='
+export XDG_CURRENT_DESKTOP="X-Cinnamon"
+export DESKTOP_SESSION="cinnamon-wayland"
+export XDG_SESSION_TYPE="wayland"
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    [ -S "$bus_cand" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+fi
+for cf in /usr/share/wayland-sessions/*cinnamon*.desktop /usr/local/share/wayland-sessions/*cinnamon*.desktop; do
+    if [ -f "$cf" ]; then
+        cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+        if [ -n "$cmd" ]; then
+            exec $cmd
+        fi
+    fi
+done
+if command -v cinnamon-session-wayland >/dev/null 2>&1; then
+    exec cinnamon-session-wayland
+elif command -v cinnamon-session >/dev/null 2>&1; then
+    exec cinnamon-session --session cinnamon-wayland
+elif command -v muffin >/dev/null 2>&1; then
+    exec muffin --wayland
+elif command -v cinnamon >/dev/null 2>&1; then
+    exec cinnamon --wayland
+else
+    exec cinnamon
+fi
+'
+            local b64_cin
+            b64_cin=$(echo "$cin_script" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_cin' | base64 -d | bash\""
+            ;;
+        cosmic)
+            local cosmic_script='
+export XDG_CURRENT_DESKTOP="COSMIC"
+export DESKTOP_SESSION="cosmic"
+export XDG_SESSION_TYPE="wayland"
+for cf in /usr/share/wayland-sessions/*cosmic*.desktop; do
+    if [ -f "$cf" ]; then
+        cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+        [ -n "$cmd" ] && exec $cmd
+    fi
+done
+if command -v cosmic-session >/dev/null 2>&1; then
+    exec cosmic-session
+elif command -v cosmic-comp >/dev/null 2>&1; then
+    exec cosmic-comp
+fi
+'
+            local b64_cosmic
+            b64_cosmic=$(echo "$cosmic_script" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_cosmic' | base64 -d | bash\""
             ;;
         niri-desktop)
             local niri_script='
@@ -990,13 +1227,70 @@ exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then 
             remote_cmd="sway"
             ;;
         hyprland)
-            remote_cmd="Hyprland"
+            remote_cmd="sh -c 'if command -v Hyprland >/dev/null 2>&1; then exec Hyprland; else exec hyprland; fi'"
             ;;
         labwc)
             remote_cmd="labwc"
             ;;
         wayfire)
             remote_cmd="wayfire"
+            ;;
+        river)
+            remote_cmd="river"
+            ;;
+        lxqt)
+            local lxqt_script='
+export XDG_CURRENT_DESKTOP="LXQt"
+export DESKTOP_SESSION="lxqt"
+export XDG_SESSION_TYPE="wayland"
+for cf in /usr/share/wayland-sessions/*lxqt*.desktop; do
+    if [ -f "$cf" ]; then
+        cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+        [ -n "$cmd" ] && exec $cmd
+    fi
+done
+exec lxqt-session
+'
+            local b64_lxqt
+            b64_lxqt=$(echo "$lxqt_script" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_lxqt' | base64 -d | bash\""
+            ;;
+        mate)
+            local mate_script='
+export XDG_CURRENT_DESKTOP="MATE"
+export DESKTOP_SESSION="mate"
+export XDG_SESSION_TYPE="wayland"
+for cf in /usr/share/wayland-sessions/*mate*.desktop; do
+    if [ -f "$cf" ]; then
+        cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+        [ -n "$cmd" ] && exec $cmd
+    fi
+done
+exec mate-session
+'
+            local b64_mate
+            b64_mate=$(echo "$mate_script" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_mate' | base64 -d | bash\""
+            ;;
+        xfce)
+            local xfce_script='
+export XDG_CURRENT_DESKTOP="XFCE"
+export DESKTOP_SESSION="xfce"
+export XDG_SESSION_TYPE="wayland"
+for cf in /usr/share/wayland-sessions/*xfce*.desktop; do
+    if [ -f "$cf" ]; then
+        cmd=$(grep -E "^Exec=" "$cf" 2>/dev/null | head -n1 | cut -d"=" -f2- | sed -E "s/%[a-zA-Z]//g" | sed "s/^[ \t]*//;s/[ \t]*$//")
+        [ -n "$cmd" ] && exec $cmd
+    fi
+done
+exec xfce4-session
+'
+            local b64_xfce
+            b64_xfce=$(echo "$xfce_script" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_xfce' | base64 -d | bash\""
+            ;;
+        weston)
+            remote_cmd="weston"
             ;;
         terminal)
             local term_script='
