@@ -202,40 +202,40 @@ flow_server() {
     case "$DISTRO_ID" in
         arch|cachyos|endeavouros|manjaro|artix)
             pkg_manager="pacman"
-            install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2"
+            install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2 xorg-xauth"
             service_name="sshd"
             ;;
         debian|ubuntu|linuxmint|pop|elementary|zorin)
             pkg_manager="apt"
-            install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2"
+            install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2 xauth"
             service_name="ssh"
             ;;
         fedora|rhel|centos|almalinux|rocky)
             pkg_manager="dnf"
-            install_cmd="dnf install -y openssh-server waypipe fuse-libs"
+            install_cmd="dnf install -y openssh-server waypipe fuse-libs xorg-x11-xauth"
             service_name="sshd"
             ;;
         opensuse*|suse)
             pkg_manager="zypper"
-            install_cmd="zypper install -y openssh waypipe libfuse2"
+            install_cmd="zypper install -y openssh waypipe libfuse2 xauth"
             service_name="sshd"
             ;;
         *)
             if [[ "$DISTRO_LIKE" =~ arch ]]; then
                 pkg_manager="pacman"
-                install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2"
+                install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2 xorg-xauth"
                 service_name="sshd"
             elif [[ "$DISTRO_LIKE" =~ debian|ubuntu ]]; then
                 pkg_manager="apt"
-                install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2"
+                install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2 xauth"
                 service_name="ssh"
             elif [[ "$DISTRO_LIKE" =~ fedora|rhel ]]; then
                 pkg_manager="dnf"
-                install_cmd="dnf install -y openssh-server waypipe fuse-libs"
+                install_cmd="dnf install -y openssh-server waypipe fuse-libs xorg-x11-xauth"
                 service_name="sshd"
             else
                 zenity --error --title="Distribuzione non supportata" \
-                    --text="Distribuzione rilevata ($DISTRO_ID) non supportata automaticamente per l'installazione dei pacchetti.\n\nInstalla manualmente: openssh e waypipe, poi avvia il servizio SSH." \
+                    --text="Distribuzione rilevata ($DISTRO_ID) non supportata automaticamente per l'installazione dei pacchetti.\n\nInstalla manualmente: openssh, waypipe e xauth, poi avvia il servizio SSH." \
                     --width=450
                 return 1
             fi
@@ -244,7 +244,7 @@ flow_server() {
 
     # Conferma utente
     if ! zenity --question --title="Configurazione Server WayRemote" \
-        --text="<b>Distribuzione rilevata:</b> ${DISTRO_ID} (${pkg_manager})\n\nVerranno installati:\n• Server OpenSSH\n• Waypipe (inoltro sessioni Wayland)\n\nVuoi procedere con l'installazione e l'avvio del servizio SSH?" \
+        --text="<b>Distribuzione rilevata:</b> ${DISTRO_ID} (${pkg_manager})\n\nVerranno installati:\n• Server OpenSSH\n• Waypipe (inoltro sessioni Wayland)\n• Supporto X11 Forwarding (xauth)\n\nVuoi procedere con l'installazione e l'avvio del servizio SSH?" \
         --ok-label="Procedi" --cancel-label="Annulla" --width=420; then
         return 0
     fi
@@ -518,7 +518,7 @@ form_add_connection() {
         --add-entry="Indirizzo IP o Host (es. 192.168.4.162)" \
         --add-entry="Nome Utente (es. $USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Rilevamento Automatico DE (Consigliato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
+        --combo-values="Rilevamento Automatico (Wayland o X11 - Consigliato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Sessione Grafica X11 (SSH Forwarding con Xwayland)|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
         --separator="|" 2>/dev/null) || f_status=$?
 
     if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
@@ -554,6 +554,7 @@ form_add_connection() {
         *"MATE"*) session_code="mate" ;;
         *"XFCE"*) session_code="xfce" ;;
         *"Weston"*) session_code="weston" ;;
+        *"X11"*) session_code="x11" ;;
         *"Terminale Remoto"*) session_code="terminal" ;;
         *"Ghostty"*) session_code="ghostty" ;;
         *"Kitty"*) session_code="kitty" ;;
@@ -616,7 +617,7 @@ form_edit_connection() {
         --add-entry="Indirizzo IP o Host (attuale: $CONN_HOST)" \
         --add-entry="Nome Utente (attuale: $CONN_USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Mantieni attuale ($CONN_SESSION)|Rilevamento Automatico DE (Consigliato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
+        --combo-values="Mantieni attuale ($CONN_SESSION)|Rilevamento Automatico (Wayland o X11 - Consigliato)|Cinnamon Desktop (Linux Mint Wayland)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|COSMIC Desktop (Pop!_OS Wayland)|Niri (Desktop Completo con Barra DMS)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|River Compositor|LXQt Desktop Wayland|MATE Desktop Wayland|XFCE Desktop Wayland|Weston Compositor|Sessione Grafica X11 (SSH Forwarding con Xwayland)|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
         --separator="|" 2>/dev/null) || f_status=$?
 
     if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
@@ -653,6 +654,7 @@ form_edit_connection() {
         *"MATE"*) session_code="mate" ;;
         *"XFCE"*) session_code="xfce" ;;
         *"Weston"*) session_code="weston" ;;
+        *"X11"*) session_code="x11" ;;
         *"Terminale Remoto"*) session_code="terminal" ;;
         *"Ghostty"*) session_code="ghostty" ;;
         *"Kitty"*) session_code="kitty" ;;
@@ -849,12 +851,150 @@ EOF
         return 1
     }
 
-    # 2. COSTRUZIONE DEL COMANDO REMOTO
+    # 2. PROBE AMBIENTE SERVER: Rilevamento automatico Wayland vs X11
+    local server_info
+    server_info=$(export DISPLAY="${DISPLAY:-:0}" SSH_ASKPASS="$askpass_script" SSH_ASKPASS_REQUIRE="force"; \
+        ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" '
+has_waypipe=0; command -v waypipe >/dev/null 2>&1 && has_waypipe=1
+has_wayland_sess=0; ls /usr/share/wayland-sessions/*.desktop >/dev/null 2>&1 && has_wayland_sess=1
+has_xsess=0; ls /usr/share/xsessions/*.desktop >/dev/null 2>&1 && has_xsess=1
+sys_env=$(systemctl --user show-environment 2>/dev/null || true)
+xdg_type=$(echo "$sys_env" | grep -E "^XDG_SESSION_TYPE=" | cut -d"=" -f2 || true)
+[ -z "$xdg_type" ] && xdg_type="${XDG_SESSION_TYPE:-}"
+has_wayland_bin=0
+for cand_wb in niri gnome-shell kwin_wayland cosmic-session sway Hyprland hyprland labwc wayfire river cinnamon-session-wayland weston; do
+    if command -v "$cand_wb" >/dev/null 2>&1; then
+        has_wayland_bin=1
+        break
+    fi
+done
+echo "WAYPIPE=$has_waypipe;WAYLAND_SESS=$has_wayland_sess;WAYLAND_BIN=$has_wayland_bin;XSESS=$has_xsess;XDG_TYPE=$xdg_type"
+' 2>/dev/null || echo "WAYPIPE=0;WAYLAND_SESS=0;WAYLAND_BIN=0;XSESS=0;XDG_TYPE=unknown")
+
+    local srv_waypipe=0 srv_wayland_sess=0 srv_wayland_bin=0 srv_xsess=0 srv_xdg_type="unknown"
+    [[ "$server_info" =~ WAYPIPE=([0-9]) ]] && srv_waypipe="${BASH_REMATCH[1]}"
+    [[ "$server_info" =~ WAYLAND_SESS=([0-9]) ]] && srv_wayland_sess="${BASH_REMATCH[1]}"
+    [[ "$server_info" =~ WAYLAND_BIN=([0-9]) ]] && srv_wayland_bin="${BASH_REMATCH[1]}"
+    [[ "$server_info" =~ XSESS=([0-9]) ]] && srv_xsess="${BASH_REMATCH[1]}"
+    [[ "$server_info" =~ XDG_TYPE=([a-zA-Z0-9_-]+) ]] && srv_xdg_type="${BASH_REMATCH[1]}"
+
+    local conn_mode="wayland"
+    if [ "$session_choice" = "x11" ]; then
+        conn_mode="x11"
+    elif [ "$srv_waypipe" -eq 1 ] && ( [ "$srv_wayland_sess" -eq 1 ] || [ "$srv_wayland_bin" -eq 1 ] ); then
+        conn_mode="wayland"
+    elif [ "$srv_waypipe" -eq 0 ] || ( [ "$srv_wayland_sess" -eq 0 ] && [ "$srv_wayland_bin" -eq 0 ] ); then
+        conn_mode="x11"
+    fi
+
+    # 3. COSTRUZIONE DEL COMANDO REMOTO
     local remote_cmd=""
-    case "$session_choice" in
-        auto|"")
-            # Script intelligente di rilevamento automatico del DE/WM sul server remoto
-            local auto_script='
+    if [ "$conn_mode" = "x11" ]; then
+        case "$session_choice" in
+            auto|""|x11)
+                local x11_script='
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    [ -S "$bus_cand" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+fi
+export GDK_BACKEND="x11,*"
+export QT_QPA_PLATFORM="xcb"
+
+term_bin=""
+if [ -n "$TERMINAL" ] && command -v "$TERMINAL" >/dev/null 2>&1; then
+    term_bin="$TERMINAL"
+elif command -v xdg-terminal-exec >/dev/null 2>&1; then
+    term_bin="xdg-terminal-exec"
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    term_bin="x-terminal-emulator"
+else
+    for cand_t in ghostty kitty alacritty foot ptyxis wezterm gnome-terminal konsole xfce4-terminal mate-terminal lxterminal terminator tilix xterm rxvt urxvt; do
+        if command -v "$cand_t" >/dev/null 2>&1; then
+            term_bin="$cand_t"
+            break
+        fi
+    done
+fi
+term_bin="${term_bin:-xterm}"
+
+fm_bin=""
+for cand_fm in nemo nautilus thunar dolphin pcmanfm caja; do
+    if command -v "$cand_fm" >/dev/null 2>&1; then
+        fm_bin="$cand_fm"
+        break
+    fi
+done
+
+if [ -n "$fm_bin" ]; then
+    "$fm_bin" &
+fi
+exec "$term_bin"
+'
+                local b64_x11
+                b64_x11=$(echo "$x11_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_x11' | base64 -d | bash\""
+                ;;
+            cinnamon)
+                local cin_x11_script='
+export GDK_BACKEND="x11,*"
+export QT_QPA_PLATFORM="xcb"
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    [ -S "$bus_cand" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+fi
+if command -v nemo >/dev/null 2>&1; then
+    nemo &
+fi
+if command -v cinnamon-settings >/dev/null 2>&1; then
+    cinnamon-settings &
+fi
+exec x-terminal-emulator 2>/dev/null || exec xterm
+'
+                local b64_cin_x11
+                b64_cin_x11=$(echo "$cin_x11_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_cin_x11' | base64 -d | bash\""
+                ;;
+            terminal)
+                local term_x11_script='
+export GDK_BACKEND="x11,*"
+export QT_QPA_PLATFORM="xcb"
+term_bin=""
+if [ -n "$TERMINAL" ] && command -v "$TERMINAL" >/dev/null 2>&1; then
+    term_bin="$TERMINAL"
+elif command -v xdg-terminal-exec >/dev/null 2>&1; then
+    term_bin="xdg-terminal-exec"
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    term_bin="x-terminal-emulator"
+else
+    for cand_t in ghostty kitty alacritty foot ptyxis wezterm gnome-terminal konsole xfce4-terminal mate-terminal lxterminal terminator tilix xterm rxvt urxvt; do
+        if command -v "$cand_t" >/dev/null 2>&1; then
+            term_bin="$cand_t"
+            break
+        fi
+    done
+fi
+term_bin="${term_bin:-xterm}"
+exec "$term_bin"
+'
+                local b64_term_x11
+                b64_term_x11=$(echo "$term_x11_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_term_x11' | base64 -d | bash\""
+                ;;
+            ghostty|kitty|alacritty|foot|ptyxis|wezterm|gnome-terminal|konsole|xfce4-terminal|xterm)
+                remote_cmd="$session_choice"
+                ;;
+            custom)
+                remote_cmd="${custom_cmd:-xterm}"
+                ;;
+            *)
+                remote_cmd="$session_choice"
+                ;;
+        esac
+    else
+        case "$session_choice" in
+            auto|"")
+                # Script intelligente di rilevamento automatico del DE/WM sul server remoto
+                local auto_script='
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     bus_cand="/run/user/$(id -u)/bus"
     [ -S "$bus_cand" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
@@ -1118,12 +1258,12 @@ EOF_KDL
         ;;
 esac
 '
-            local b64_auto
-            b64_auto=$(echo "$auto_script" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_auto' | base64 -d | bash\""
-            ;;
-        cinnamon)
-            local cin_script='
+                local b64_auto
+                b64_auto=$(echo "$auto_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_auto' | base64 -d | bash\""
+                ;;
+            cinnamon)
+                local cin_script='
 export XDG_CURRENT_DESKTOP="X-Cinnamon"
 export DESKTOP_SESSION="cinnamon-wayland"
 export XDG_SESSION_TYPE="wayland"
@@ -1153,12 +1293,12 @@ else
     exec cinnamon
 fi
 '
-            local b64_cin
-            b64_cin=$(echo "$cin_script" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_cin' | base64 -d | bash\""
-            ;;
-        cosmic)
-            local cosmic_script='
+                local b64_cin
+                b64_cin=$(echo "$cin_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_cin' | base64 -d | bash\""
+                ;;
+            cosmic)
+                local cosmic_script='
 export XDG_CURRENT_DESKTOP="COSMIC"
 export DESKTOP_SESSION="cosmic"
 export XDG_SESSION_TYPE="wayland"
@@ -1174,12 +1314,12 @@ elif command -v cosmic-comp >/dev/null 2>&1; then
     exec cosmic-comp
 fi
 '
-            local b64_cosmic
-            b64_cosmic=$(echo "$cosmic_script" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_cosmic' | base64 -d | bash\""
-            ;;
-        niri-desktop)
-            local niri_script='
+                local b64_cosmic
+                b64_cosmic=$(echo "$cosmic_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_cosmic' | base64 -d | bash\""
+                ;;
+            niri-desktop)
+                local niri_script='
 CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
 mkdir -p "$CFG_DIR"
 RUN_CFG="$CFG_DIR/niri_remote_config.kdl"
@@ -1213,33 +1353,33 @@ binds {
 EOF_KDL
 exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; if [ -n \"$term_bin\" ] && command -v \"$term_bin\" >/dev/null 2>&1; then \"$term_bin\" & fi; true"
 '
-            local b64_niri
-            b64_niri=$(echo "$niri_script" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_niri' | base64 -d | bash\""
-            ;;
-        gnome)
-            remote_cmd="gnome-shell --wayland"
-            ;;
-        plasma)
-            remote_cmd="kwin_wayland --xwayland"
-            ;;
-        sway)
-            remote_cmd="sway"
-            ;;
-        hyprland)
-            remote_cmd="sh -c 'if command -v Hyprland >/dev/null 2>&1; then exec Hyprland; else exec hyprland; fi'"
-            ;;
-        labwc)
-            remote_cmd="labwc"
-            ;;
-        wayfire)
-            remote_cmd="wayfire"
-            ;;
-        river)
-            remote_cmd="river"
-            ;;
-        lxqt)
-            local lxqt_script='
+                local b64_niri
+                b64_niri=$(echo "$niri_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_niri' | base64 -d | bash\""
+                ;;
+            gnome)
+                remote_cmd="gnome-shell --wayland"
+                ;;
+            plasma)
+                remote_cmd="kwin_wayland --xwayland"
+                ;;
+            sway)
+                remote_cmd="sway"
+                ;;
+            hyprland)
+                remote_cmd="sh -c 'if command -v Hyprland >/dev/null 2>&1; then exec Hyprland; else exec hyprland; fi'"
+                ;;
+            labwc)
+                remote_cmd="labwc"
+                ;;
+            wayfire)
+                remote_cmd="wayfire"
+                ;;
+            river)
+                remote_cmd="river"
+                ;;
+            lxqt)
+                local lxqt_script='
 export XDG_CURRENT_DESKTOP="LXQt"
 export DESKTOP_SESSION="lxqt"
 export XDG_SESSION_TYPE="wayland"
@@ -1251,12 +1391,12 @@ for cf in /usr/share/wayland-sessions/*lxqt*.desktop; do
 done
 exec lxqt-session
 '
-            local b64_lxqt
-            b64_lxqt=$(echo "$lxqt_script" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_lxqt' | base64 -d | bash\""
-            ;;
-        mate)
-            local mate_script='
+                local b64_lxqt
+                b64_lxqt=$(echo "$lxqt_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_lxqt' | base64 -d | bash\""
+                ;;
+            mate)
+                local mate_script='
 export XDG_CURRENT_DESKTOP="MATE"
 export DESKTOP_SESSION="mate"
 export XDG_SESSION_TYPE="wayland"
@@ -1268,12 +1408,12 @@ for cf in /usr/share/wayland-sessions/*mate*.desktop; do
 done
 exec mate-session
 '
-            local b64_mate
-            b64_mate=$(echo "$mate_script" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_mate' | base64 -d | bash\""
-            ;;
-        xfce)
-            local xfce_script='
+                local b64_mate
+                b64_mate=$(echo "$mate_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_mate' | base64 -d | bash\""
+                ;;
+            xfce)
+                local xfce_script='
 export XDG_CURRENT_DESKTOP="XFCE"
 export DESKTOP_SESSION="xfce"
 export XDG_SESSION_TYPE="wayland"
@@ -1285,15 +1425,15 @@ for cf in /usr/share/wayland-sessions/*xfce*.desktop; do
 done
 exec xfce4-session
 '
-            local b64_xfce
-            b64_xfce=$(echo "$xfce_script" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_xfce' | base64 -d | bash\""
-            ;;
-        weston)
-            remote_cmd="weston"
-            ;;
-        terminal)
-            local term_script='
+                local b64_xfce
+                b64_xfce=$(echo "$xfce_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_xfce' | base64 -d | bash\""
+                ;;
+            weston)
+                remote_cmd="weston"
+                ;;
+            terminal)
+                local term_script='
 term_bin=""
 if [ -n "$TERMINAL" ] && command -v "$TERMINAL" >/dev/null 2>&1; then
     term_bin="$TERMINAL"
@@ -1312,30 +1452,45 @@ fi
 term_bin="${term_bin:-xterm}"
 exec "$term_bin"
 '
-            local b64_term
-            b64_term=$(echo "$term_script" | base64 -w 0)
-            remote_cmd="bash -c \"echo '$b64_term' | base64 -d | bash\""
-            ;;
-        ghostty|kitty|alacritty|foot|ptyxis|wezterm|gnome-terminal|konsole|xfce4-terminal|xterm)
-            remote_cmd="$session_choice"
-            ;;
-        custom)
-            remote_cmd="${custom_cmd:-niri}"
-            ;;
-        *)
-            remote_cmd="$session_choice"
-            ;;
-    esac
+                local b64_term
+                b64_term=$(echo "$term_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_term' | base64 -d | bash\""
+                ;;
+            ghostty|kitty|alacritty|foot|ptyxis|wezterm|gnome-terminal|konsole|xfce4-terminal|xterm)
+                remote_cmd="$session_choice"
+                ;;
+            custom)
+                remote_cmd="${custom_cmd:-niri}"
+                ;;
+            *)
+                remote_cmd="$session_choice"
+                ;;
+        esac
+    fi
 
-    # 3. AVVIO SESSIONE GRAFICA WAYPIPE
+    # 4. AVVIO SESSIONE GRAFICA (WAYPIPE O SSH X11 FORWARDING)
     local session_log="/tmp/wayremote_session.log"
     rm -f "$session_log"
 
     if command -v notify-send &>/dev/null; then
-        notify-send "WayRemote" "Avvio sessione '${session_choice}' su ${remote_user}@${remote_ip}..."
+        if [ "$conn_mode" = "x11" ]; then
+            notify-send "WayRemote" "Avvio sessione X11 su ${remote_user}@${remote_ip}..."
+        else
+            notify-send "WayRemote" "Avvio sessione '${session_choice}' su ${remote_user}@${remote_ip}..."
+        fi
     fi
 
     (
+        export DISPLAY="${DISPLAY:-}"
+        if [ -z "$DISPLAY" ]; then
+            for xsock in /tmp/.X11-unix/X*; do
+                if [ -S "$xsock" ]; then
+                    disp_num=$(basename "$xsock" | sed 's/^X//')
+                    export DISPLAY=":$disp_num"
+                    break
+                fi
+            done
+        fi
         export DISPLAY="${DISPLAY:-:0}"
         export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
         if [ -z "${WAYLAND_DISPLAY:-}" ] || [ ! -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
@@ -1349,28 +1504,45 @@ exec "$term_bin"
         export SSH_ASKPASS="$askpass_script"
         export SSH_ASKPASS_REQUIRE="force"
 
-        echo "==> [WayRemote] Avvio sessione: $session_choice su $remote_user@$remote_ip" > "$session_log"
+        if [ "$conn_mode" = "wayland" ]; then
+            echo "==> [WayRemote] Avvio sessione Wayland ($session_choice) su $remote_user@$remote_ip" > "$session_log"
 
-        # Tentativo 1: compressione standard lz4
-        if waypipe -c lz4 ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
-            exit 0
+            # Tentativo 1: compressione standard lz4
+            if waypipe -c lz4 ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                exit 0
+            fi
+
+            # Tentativo 2: fallback sicuro senza DMABUF GPU (memoria condivisa software)
+            if waypipe --no-gpu -c lz4 ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                exit 0
+            fi
+
+            # Tentativo 3: socket diretto senza compressione e no-gpu
+            if waypipe --no-gpu ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                exit 0
+            fi
+
+            # Fallback automatico su SSH X11 Forwarding se waypipe fallisce sul server
+            echo "==> [WayRemote] Fallback automatico su SSH X11 Forwarding..." >> "$session_log"
+            ssh -Y -C -o ForwardX11Timeout=0 "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "nemo || nautilus || thunar || x-terminal-emulator || xterm" >> "$session_log" 2>&1
+        else
+            echo "==> [WayRemote] Avvio sessione X11 (SSH Forwarding con compressione) su $remote_user@$remote_ip" > "$session_log"
+            ssh -Y -C -o ForwardX11Timeout=0 "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1
         fi
-
-        # Tentativo 2: fallback sicuro senza DMABUF GPU (memoria condivisa software)
-        if waypipe --no-gpu -c lz4 ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
-            exit 0
-        fi
-
-        # Tentativo 3: socket diretto senza compressione e no-gpu
-        waypipe --no-gpu ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1
     )
     local wp_exit=$?
 
     if [ "$wp_exit" -ne 0 ]; then
         if [ -s "$session_log" ]; then
-            zenity --text-info --title="Log Sessione WayRemote" \
-                --filename="$session_log" \
-                --width=620 --height=400 2>/dev/null || true
+            if grep -qi "X11 forwarding request failed" "$session_log"; then
+                zenity --warning --title="Inoltro X11 Non Abilitato sul Server" \
+                    --text="<b>Il server remoto non ha abilitato l'inoltro grafico X11.</b>\n\nPer abilitarlo, esegui sul server:\n1. Aggiungi <tt>X11Forwarding yes</tt> in <tt>/etc/ssh/sshd_config</tt>\n2. Installa il pacchetto <tt>xauth</tt> (es. <tt>sudo apt install xauth</tt>)\n3. Riavvia SSH: <tt>sudo systemctl restart ssh</tt>" \
+                    --width=480 2>/dev/null || true
+            else
+                zenity --text-info --title="Log Sessione WayRemote" \
+                    --filename="$session_log" \
+                    --width=620 --height=400 2>/dev/null || true
+            fi
         fi
     fi
 

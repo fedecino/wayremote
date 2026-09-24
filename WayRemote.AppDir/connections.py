@@ -12,7 +12,7 @@ CONFIG_DIR = os.path.expanduser("~/.config/wayremote")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "connections.json")
 
 SESSION_PRESETS = {
-    "auto": "Rilevamento Automatico DE (Consigliato)",
+    "auto": "Rilevamento Automatico (Wayland o X11 - Consigliato)",
     "cinnamon": "Cinnamon Desktop (Linux Mint Wayland)",
     "gnome": "GNOME Desktop (Shell Wayland)",
     "plasma": "KDE Plasma (KWin Wayland)",
@@ -27,6 +27,7 @@ SESSION_PRESETS = {
     "mate": "MATE Desktop Wayland",
     "xfce": "XFCE Desktop Wayland",
     "weston": "Weston Compositor",
+    "x11": "Sessione Grafica X11 (SSH Forwarding con Xwayland)",
     "terminal": "Terminale Remoto (Rilevamento Automatico)",
     "ghostty": "Terminale Ghostty Remoto",
     "kitty": "Terminale Kitty Remoto",
