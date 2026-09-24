@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=WayRemote
+GenericName=Remote Desktop Wayland
+Comment=Accesso Desktop Remoto Wayland nativo via waypipe e SSH
+Exec=wayremote --client
+Icon=wayremote
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=Wayland;Remote;Desktop;SSH;waypipe;niri;
+StartupNotify=true

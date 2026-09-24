@@ -1,0 +1,809 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# WayRemote - Utility Universale per Remote Login Wayland
+# ==============================================================================
+set -euo pipefail
+
+# Determinazione della directory dell'AppDir
+APPDIR="${APPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+APPIMAGE_BIN="${APPIMAGE:-$0}"
+
+# Verifica se libfuse.so.2 è presente nel sistema
+check_fuse() {
+    if ldconfig -p 2>/dev/null | grep -q "libfuse\.so\.2"; then
+        return 0
+    fi
+    for path in /usr/lib/libfuse.so.2 /usr/lib64/libfuse.so.2 /lib/x86_64-linux-gnu/libfuse.so.2 /lib64/libfuse.so.2 /usr/lib/x86_64-linux-gnu/libfuse.so.2; do
+        if [ -f "$path" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Funzione per verificare ed autoinstallare le dipendenze essenziali (zenity, fuse2)
+ensure_system_dependencies() {
+    local need_zenity=0
+    local need_fuse=0
+
+    if ! command -v zenity &>/dev/null; then
+        need_zenity=1
+    fi
+
+    if ! check_fuse; then
+        need_fuse=1
+    fi
+
+    # Se tutto è già presente, procedi subito
+    if [ "$need_zenity" -eq 0 ] && [ "$need_fuse" -eq 0 ]; then
+        return 0
+    fi
+
+    detect_distro
+    local missing_pkgs=""
+    local install_cmd=""
+
+    case "$DISTRO_ID" in
+        arch|cachyos|endeavouros|manjaro|artix)
+            [ "$need_zenity" -eq 1 ] && missing_pkgs="$missing_pkgs zenity"
+            [ "$need_fuse" -eq 1 ] && missing_pkgs="$missing_pkgs fuse2"
+            install_cmd="pacman -S --noconfirm $missing_pkgs"
+            ;;
+        debian|ubuntu|linuxmint|pop|elementary|zorin)
+            [ "$need_zenity" -eq 1 ] && missing_pkgs="$missing_pkgs zenity"
+            [ "$need_fuse" -eq 1 ] && missing_pkgs="$missing_pkgs libfuse2"
+            install_cmd="apt-get update && apt-get install -y $missing_pkgs"
+            ;;
+        fedora|rhel|centos|almalinux|rocky)
+            [ "$need_zenity" -eq 1 ] && missing_pkgs="$missing_pkgs zenity"
+            [ "$need_fuse" -eq 1 ] && missing_pkgs="$missing_pkgs fuse-libs"
+            install_cmd="dnf install -y $missing_pkgs"
+            ;;
+        opensuse*|suse)
+            [ "$need_zenity" -eq 1 ] && missing_pkgs="$missing_pkgs zenity"
+            [ "$need_fuse" -eq 1 ] && missing_pkgs="$missing_pkgs libfuse2"
+            install_cmd="zypper install -y $missing_pkgs"
+            ;;
+        *)
+            if [[ "$DISTRO_LIKE" =~ arch ]]; then
+                [ "$need_zenity" -eq 1 ] && missing_pkgs="$missing_pkgs zenity"
+                [ "$need_fuse" -eq 1 ] && missing_pkgs="$missing_pkgs fuse2"
+                install_cmd="pacman -S --noconfirm $missing_pkgs"
+            elif [[ "$DISTRO_LIKE" =~ debian|ubuntu ]]; then
+                [ "$need_zenity" -eq 1 ] && missing_pkgs="$missing_pkgs zenity"
+                [ "$need_fuse" -eq 1 ] && missing_pkgs="$missing_pkgs libfuse2"
+                install_cmd="apt-get update && apt-get install -y $missing_pkgs"
+            elif [[ "$DISTRO_LIKE" =~ fedora|rhel ]]; then
+                [ "$need_zenity" -eq 1 ] && missing_pkgs="$missing_pkgs zenity"
+                [ "$need_fuse" -eq 1 ] && missing_pkgs="$missing_pkgs fuse-libs"
+                install_cmd="dnf install -y $missing_pkgs"
+            else
+                [ "$need_zenity" -eq 1 ] && missing_pkgs="$missing_pkgs zenity"
+                [ "$need_fuse" -eq 1 ] && missing_pkgs="$missing_pkgs fuse2"
+                install_cmd="pacman -S --noconfirm $missing_pkgs"
+            fi
+            ;;
+    esac
+
+    # 1. Tentativo tramite pkexec (popup grafico nativo di autenticazione del desktop)
+    if command -v pkexec &>/dev/null; then
+        if pkexec sh -c "$install_cmd" 2>/dev/null; then
+            if ([ "$need_zenity" -eq 0 ] || command -v zenity &>/dev/null) && ([ "$need_fuse" -eq 0 ] || check_fuse); then
+                return 0
+            fi
+        fi
+    fi
+
+    # 2. Fallback tramite finestra di terminale
+    local term
+    term=$(find_terminal)
+    if [ -n "$term" ]; then
+        case "$term" in
+            ghostty)
+                "$term" -e bash -c "echo '==> [WayRemote] Installazione dipendenze di sistema ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
+                ;;
+            kitty)
+                "$term" --title "WayRemote - Setup Dipendenze" bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
+                ;;
+            alacritty)
+                "$term" -T "WayRemote - Setup Dipendenze" -e bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
+                ;;
+            foot)
+                "$term" -T "WayRemote - Setup Dipendenze" bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
+                ;;
+            wezterm)
+                "$term" start -- bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
+                ;;
+            gnome-terminal)
+                "$term" --title="WayRemote - Setup Dipendenze" -- bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
+                ;;
+            konsole)
+                "$term" -p tabtitle="WayRemote - Setup Dipendenze" -e bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
+                ;;
+            xfce4-terminal|lxterminal)
+                "$term" -T "WayRemote - Setup Dipendenze" -e "bash -c 'echo [WayRemote] Installazione dipendenze...; sudo $install_cmd; sleep 1'"
+                ;;
+            *)
+                "$term" -e bash -c "sudo $install_cmd; sleep 1"
+                ;;
+        esac
+    fi
+
+    if [ "$need_zenity" -eq 1 ] && ! command -v zenity &>/dev/null; then
+        echo "[WayRemote] ERRORE: Impossibile installare automaticamente 'zenity'." >&2
+        exit 1
+    fi
+}
+
+# Rilevamento della distribuzione Linux
+detect_distro() {
+    if [ -f /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        DISTRO_ID="${ID:-unknown}"
+        DISTRO_LIKE="${ID_LIKE:-}"
+    else
+        DISTRO_ID="unknown"
+        DISTRO_LIKE=""
+    fi
+}
+
+# Rilevamento del miglior emulatore di terminale disponibile
+find_terminal() {
+    local terminals=(
+        "ghostty"
+        "kitty"
+        "alacritty"
+        "foot"
+        "wezterm"
+        "gnome-terminal"
+        "konsole"
+        "xfce4-terminal"
+        "lxterminal"
+        "x-terminal-emulator"
+        "xterm"
+    )
+
+    for term in "${terminals[@]}"; do
+        if command -v "$term" &>/dev/null; then
+            echo "$term"
+            return 0
+        fi
+    done
+    echo ""
+}
+
+# Flusso Configurazione SERVER
+flow_server() {
+    detect_distro
+    local pkg_manager=""
+    local install_cmd=""
+    local service_name="sshd"
+
+    case "$DISTRO_ID" in
+        arch|cachyos|endeavouros|manjaro|artix)
+            pkg_manager="pacman"
+            install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2"
+            service_name="sshd"
+            ;;
+        debian|ubuntu|linuxmint|pop|elementary|zorin)
+            pkg_manager="apt"
+            install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2"
+            service_name="ssh"
+            ;;
+        fedora|rhel|centos|almalinux|rocky)
+            pkg_manager="dnf"
+            install_cmd="dnf install -y openssh-server waypipe fuse-libs"
+            service_name="sshd"
+            ;;
+        opensuse*|suse)
+            pkg_manager="zypper"
+            install_cmd="zypper install -y openssh waypipe libfuse2"
+            service_name="sshd"
+            ;;
+        *)
+            if [[ "$DISTRO_LIKE" =~ arch ]]; then
+                pkg_manager="pacman"
+                install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2"
+                service_name="sshd"
+            elif [[ "$DISTRO_LIKE" =~ debian|ubuntu ]]; then
+                pkg_manager="apt"
+                install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2"
+                service_name="ssh"
+            elif [[ "$DISTRO_LIKE" =~ fedora|rhel ]]; then
+                pkg_manager="dnf"
+                install_cmd="dnf install -y openssh-server waypipe fuse-libs"
+                service_name="sshd"
+            else
+                zenity --error --title="Distribuzione non supportata" \
+                    --text="Distribuzione rilevata ($DISTRO_ID) non supportata automaticamente per l'installazione dei pacchetti.\n\nInstalla manualmente: openssh e waypipe, poi avvia il servizio SSH." \
+                    --width=450
+                return 1
+            fi
+            ;;
+    esac
+
+    # Conferma utente
+    if ! zenity --question --title="Configurazione Server WayRemote" \
+        --text="<b>Distribuzione rilevata:</b> ${DISTRO_ID} (${pkg_manager})\n\nVerranno installati:\n• Server OpenSSH\n• Waypipe (inoltro sessioni Wayland)\n\nVuoi procedere con l'installazione e l'avvio del servizio SSH?" \
+        --ok-label="Procedi" --cancel-label="Annulla" --width=420; then
+        return 0
+    fi
+
+    # Richiesta password sudo
+    local sudo_pass=""
+    sudo_pass=$(zenity --password --title="Autenticazione Richiesta" \
+        --text="Inserisci la password di amministrazione (sudo) per configurare il sistema:") || return 0
+
+    if [ -z "$sudo_pass" ]; then
+        zenity --error --text="Password non inserita. Operazione annullata."
+        return 1
+    fi
+
+    # Esecuzione script di setup con barra di progresso
+    (
+        echo "10"; echo "# Aggiornamento repository e installazione pacchetti..."
+        if ! echo "$sudo_pass" | sudo -S -- sh -c "$install_cmd" 2>&1; then
+            echo "ERROR"
+            exit 1
+        fi
+
+        echo "50"; echo "# Configurazione di SSH (autenticazione password e forwarding)..."
+        echo "$sudo_pass" | sudo -S -- sh -c '
+            mkdir -p /etc/ssh/sshd_config.d
+            cat << "EOF" > /etc/ssh/sshd_config.d/wayremote.conf
+# WayRemote SSH Configuration
+PasswordAuthentication yes
+KbdInteractiveAuthentication yes
+UsePAM yes
+X11Forwarding yes
+IPQoS none
+EOF
+        ' 2>&1 || true
+
+        echo "70"; echo "# Abilitazione e riavvio del servizio SSH ($service_name)..."
+        if ! echo "$sudo_pass" | sudo -S -- sh -c "systemctl enable --now $service_name || systemctl enable --now ssh || systemctl enable --now sshd; systemctl restart $service_name || systemctl restart ssh || systemctl restart sshd" 2>&1; then
+            echo "ERROR"
+            exit 1
+        fi
+
+        echo "85"; echo "# Configurazione del firewall (apertura porta 22 per SSH)..."
+        echo "$sudo_pass" | sudo -S -- sh -c '
+            if command -v ufw >/dev/null 2>&1 && systemctl is-active --quiet ufw; then
+                ufw allow 22/tcp || ufw allow ssh || true
+                ufw reload || true
+            fi
+            if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld; then
+                firewall-cmd --permanent --add-service=ssh >/dev/null 2>&1 || true
+                firewall-cmd --reload >/dev/null 2>&1 || true
+            fi
+        ' 2>&1 || true
+
+        echo "100"; echo "# Configurazione completata con successo!"
+        sleep 1
+    ) | zenity --progress --title="Installazione Server WayRemote" --percentage=0 --auto-close --width=400
+
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        zenity --error --title="Errore Installazione" \
+            --text="Si è verificato un errore durante l'installazione dei pacchetti o l'avvio di SSH.\nVerifica che la password sia corretta e che la connessione internet sia attiva." \
+            --width=420
+        return 1
+    fi
+
+    # Successo
+    local ip_lan
+    ip_lan=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "indirizzo-ip-lan")
+    
+    zenity --info --title="Server WayRemote Pronto" \
+        --text="<b>Configurazione completata!</b>\n\nQuesto computer è ora pronto a ricevere connessioni remote Wayland.\n\n• <b>IP LAN:</b> ${ip_lan}\n• <b>Utente:</b> ${USER}\n• <b>Servizio:</b> SSH attivo (Porta 22 aperta)" \
+        --width=420
+
+    # Chiede se installare il client su questa stessa macchina
+    if zenity --question --title="Integrazione Desktop Client" \
+        --text="Desideri installare e integrare il Client WayRemote anche nel menu applicazioni di questo PC?" \
+        --ok-label="Sì, integra" --cancel-label="No, grazie"; then
+        flow_install
+    fi
+}
+
+# Flusso INSTALLAZIONE CLIENT (Integrazione Desktop)
+flow_install() {
+    local target_bin_dir="$HOME/.local/bin"
+    local target_icon_dir="$HOME/.local/share/icons/hicolor/128x128/apps"
+    local target_pixmaps="$HOME/.local/share/pixmaps"
+    local target_app_dir="$HOME/.local/share/applications"
+    local target_bin="$target_bin_dir/wayremote"
+    local target_desktop="$target_app_dir/wayremote.desktop"
+
+    mkdir -p "$target_bin_dir" "$target_icon_dir" "$target_pixmaps" "$target_app_dir"
+
+    # Copia l'AppImage (o l'eseguibile corrente)
+    if [ -n "${APPIMAGE:-}" ] && [ -f "$APPIMAGE" ]; then
+        cp -f "$APPIMAGE" "$target_bin"
+    elif [ -f "$0" ]; then
+        cp -f "$0" "$target_bin"
+    else
+        # Se avviato dall'AppDir scompattata
+        cat << 'EOF' > "$target_bin"
+#!/usr/bin/env bash
+exec /usr/bin/env wayremote "$@"
+EOF
+    fi
+    chmod +x "$target_bin"
+
+    # Copia Icona
+    if [ -f "$APPDIR/wayremote.png" ]; then
+        cp -f "$APPDIR/wayremote.png" "$target_icon_dir/wayremote.png"
+        cp -f "$APPDIR/wayremote.png" "$target_pixmaps/wayremote.png"
+    fi
+
+    # Crea desktop entry
+    cat << EOF > "$target_desktop"
+[Desktop Entry]
+Type=Application
+Name=WayRemote
+GenericName=Remote Desktop Wayland
+Comment=Accesso Desktop Remoto Wayland nativo via waypipe e SSH
+Exec=$target_bin --client
+Icon=wayremote
+Terminal=false
+Categories=Network;RemoteAccess;Utility;
+Keywords=Wayland;Remote;Desktop;SSH;waypipe;niri;
+StartupNotify=true
+EOF
+    chmod +x "$target_desktop"
+
+    # Aggiorna database applicazioni se disponibile
+    if command -v update-desktop-database &>/dev/null; then
+        update-desktop-database "$target_app_dir" 2>/dev/null || true
+    fi
+    if command -v gtk-update-icon-cache &>/dev/null; then
+        gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+    fi
+
+    local path_warning=""
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        path_warning="\n\n<i>Nota: Assicurati che <b>~/.local/bin</b> sia incluso nel tuo \$PATH.</i>"
+    fi
+
+    zenity --info --title="Integrazione Completata" \
+        --text="<b>WayRemote installato con successo!</b>\n\n• Eseguibile: <tt>$target_bin</tt>\n• Desktop Entry: <tt>$target_desktop</tt>\n• Icona: <tt>$target_icon_dir/wayremote.png</tt>\n\nTroverai WayRemote nel menu applicazioni del tuo desktop.$path_warning" \
+        --width=450
+}
+
+# Helper per il Connection Manager
+CONNECTIONS_PY="$APPDIR/connections.py"
+
+# Flusso CLIENT (Gestione Connessioni in stile GNOME-RDP / Remmina)
+flow_client() {
+    # Controllo dipendenze client
+    if ! command -v waypipe &>/dev/null; then
+        if zenity --question --title="Waypipe mancante" \
+            --text="<b>'waypipe' non è installato su questo sistema client.</b>\n\nÈ necessario per inoltrare la sessione grafica Wayland.\nVuoi installarlo ora tramite il configuratore Server/Dipendenze?" \
+            --ok-label="Configura dipendenze" --cancel-label="Annulla"; then
+            flow_server
+            return
+        else
+            return 1
+        fi
+    fi
+
+    if ! command -v ssh &>/dev/null; then
+        zenity --error --text="Il comando 'ssh' (OpenSSH client) non è presente nel sistema."
+        return 1
+    fi
+
+    # Inizializza il file delle connessioni se non presente
+    python3 "$CONNECTIONS_PY" init >/dev/null 2>&1 || true
+
+    while true; do
+        local count
+        count=$(python3 "$CONNECTIONS_PY" count 2>/dev/null || echo 0)
+
+        if [ "$count" -eq 0 ]; then
+            if zenity --question --title="WayRemote - Nessuna Connessione" \
+                --text="Non hai ancora salvato alcun computer remoto.\n\nVuoi aggiungere una nuova connessione adesso?" \
+                --ok-label="Aggiungi Connessione" --cancel-label="Esci"; then
+                form_add_connection
+                continue
+            else
+                return 0
+            fi
+        fi
+
+        # Carica la lista dei profili per zenity
+        local list_args=()
+        while IFS= read -r line; do
+            list_args+=("$line")
+        done < <(python3 "$CONNECTIONS_PY" list)
+
+        local action_out
+        action_out=$(zenity --list \
+            --title="WayRemote - Gestione Connessioni Desktop Remoto" \
+            --text="<b>Computer Remoti Memorizzati:</b>\nSeleziona una connessione e premi <b>Connetti</b> (o fai doppio clic):" \
+            --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
+            "${list_args[@]}" \
+            --ok-label="Connetti" \
+            --cancel-label="Chiudi" \
+            --extra-button="+ Nuovo" \
+            --extra-button="Modifica" \
+            --extra-button="Elimina" \
+            --extra-button="Connessione Rapida" \
+            --height=380 --width=720 2>/dev/null) || return 0
+
+        case "$action_out" in
+            "+ Nuovo")
+                form_add_connection
+                ;;
+            "Modifica")
+                form_edit_connection
+                ;;
+            "Elimina")
+                form_delete_connection
+                ;;
+            "Connessione Rapida")
+                connect_quick
+                return
+                ;;
+            *)
+                if [ -n "$action_out" ]; then
+                    connect_profile "$action_out"
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+# Form Aggiungi Connessione
+form_add_connection() {
+    local form_res
+    form_res=$(zenity --forms \
+        --title="Aggiungi Computer Remoto" \
+        --text="Inserisci i dati per memorizzare il nuovo client/server:" \
+        --add-entry="Nome Connessione (es. ThinkPad Ufficio)" \
+        --add-entry="Indirizzo IP o Host (es. 192.168.4.162)" \
+        --add-entry="Nome Utente (es. $USER)" \
+        --add-combo="Sessione Remota" \
+        --combo-values="Niri (Desktop Completo con Barra DMS)|Niri (Finestra Semplice)|Terminale Kitty|Terminale Alacritty|Terminale Ghostty|Terminale Foot|Sway Compositor|Labwc Compositor|Comando Personalizzato" \
+        --separator="|" 2>/dev/null) || return 0
+
+    local name host user sess_label
+    name=$(echo "$form_res" | cut -d'|' -f1)
+    host=$(echo "$form_res" | cut -d'|' -f2)
+    user=$(echo "$form_res" | cut -d'|' -f3)
+    sess_label=$(echo "$form_res" | cut -d'|' -f4)
+
+    if [ -z "$name" ] || [ -z "$host" ] || [ -z "$user" ]; then
+        zenity --error --text="I campi Nome, Host e Utente sono obbligatori."
+        return
+    fi
+
+    local session_code="niri-desktop"
+    local custom_cmd=""
+    case "$sess_label" in
+        *"Desktop Completo"*) session_code="niri-desktop" ;;
+        *"Finestra Semplice"*) session_code="niri" ;;
+        *"Kitty"*) session_code="kitty" ;;
+        *"Alacritty"*) session_code="alacritty" ;;
+        *"Ghostty"*) session_code="ghostty" ;;
+        *"Foot"*) session_code="foot" ;;
+        *"Sway"*) session_code="sway" ;;
+        *"Labwc"*) session_code="labwc" ;;
+        *"Personalizzato"*)
+            session_code="custom"
+            custom_cmd=$(zenity --entry --title="Comando Personalizzato" --text="Inserisci il comando da eseguire sul server:" --entry-text="niri") || return 0
+            ;;
+    esac
+
+    python3 "$CONNECTIONS_PY" add "$name" "$host" "$user" "$session_code" "$custom_cmd"
+}
+
+# Form Modifica Connessione
+form_edit_connection() {
+    local edit_id
+    edit_id=$(zenity --entry --title="Modifica Connessione" --text="Inserisci l'ID del computer da modificare:" 2>/dev/null) || return 0
+    if [ -z "$edit_id" ]; then return; fi
+
+    local get_vars
+    get_vars=$(python3 "$CONNECTIONS_PY" get "$edit_id" 2>/dev/null) || {
+        zenity --error --text="Profilo con ID $edit_id non trovato."
+        return
+    }
+    eval "$get_vars"
+
+    local form_res
+    form_res=$(zenity --forms \
+        --title="Modifica Connessione #$CONN_ID ($CONN_NAME)" \
+        --text="Modifica i dati del computer remoto:" \
+        --add-entry="Nome Profilo" \
+        --add-entry="Indirizzo IP o Host" \
+        --add-entry="Nome Utente" \
+        --separator="|" 2>/dev/null) || return 0
+
+    local name host user
+    name=$(echo "$form_res" | cut -d'|' -f1)
+    host=$(echo "$form_res" | cut -d'|' -f2)
+    user=$(echo "$form_res" | cut -d'|' -f3)
+
+    [ -z "$name" ] && name="$CONN_NAME"
+    [ -z "$host" ] && host="$CONN_HOST"
+    [ -z "$user" ] && user="$CONN_USER"
+
+    python3 "$CONNECTIONS_PY" update "$CONN_ID" "$name" "$host" "$user" "$CONN_SESSION" "$CONN_CUSTOM_CMD"
+}
+
+# Form Elimina Connessione
+form_delete_connection() {
+    local del_id
+    del_id=$(zenity --entry --title="Elimina Connessione" --text="Inserisci l'ID del computer da eliminare:" 2>/dev/null) || return 0
+    if [ -z "$del_id" ]; then return; fi
+
+    if zenity --question --title="Conferma Eliminazione" --text="Sei sicuro di voler eliminare la connessione ID #$del_id?" 2>/dev/null; then
+        python3 "$CONNECTIONS_PY" delete "$del_id"
+    fi
+}
+
+# Connessione rapida senza salvare
+connect_quick() {
+    local remote_ip
+    remote_ip=$(zenity --entry --title="Connessione Rapida" --text="Inserisci l'indirizzo IP del server:" --entry-text="192.168.4.162") || return 0
+    if [ -z "$remote_ip" ]; then return; fi
+
+    local remote_user
+    remote_user=$(zenity --entry --title="Connessione Rapida" --text="Inserisci il nome utente:" --entry-text="$USER") || return 0
+    if [ -z "$remote_user" ]; then return; fi
+
+    local remote_pass
+    remote_pass=$(zenity --password --title="Password SSH" --text="Inserisci la password per <b>${remote_user}@${remote_ip}</b>:") || return 0
+
+    launch_session "$remote_ip" "$remote_user" "$remote_pass" "niri-desktop" ""
+}
+
+# Connessione a un profilo memorizzato
+connect_profile() {
+    local prof_id="$1"
+    local get_vars
+    get_vars=$(python3 "$CONNECTIONS_PY" get "$prof_id" 2>/dev/null) || {
+        zenity --error --text="Impossibile caricare il profilo selezionato."
+        return 1
+    }
+    eval "$get_vars"
+
+    local remote_pass
+    remote_pass=$(zenity --password \
+        --title="WayRemote - Password per ${CONN_NAME}" \
+        --text="Inserisci la password per <b>${CONN_USER}@${CONN_HOST}</b>:\n<i>(Lascia vuoto se hai già configurato la chiave SSH pubblica)</i>") || return 0
+
+    launch_session "$CONN_HOST" "$CONN_USER" "$remote_pass" "$CONN_SESSION" "$CONN_CUSTOM_CMD"
+}
+
+# Avvio effettivo della sessione Waypipe / SSH
+launch_session() {
+    local remote_ip="$1"
+    local remote_user="$2"
+    local remote_pass="$3"
+    local session_choice="$4"
+    local custom_cmd="$5"
+
+    # Script helper per SSH_ASKPASS
+    local askpass_script
+    askpass_script=$(mktemp /tmp/wayremote_askpass.XXXXXX.sh)
+    chmod 700 "$askpass_script"
+
+    cat << EOF > "$askpass_script"
+#!/usr/bin/env bash
+PROMPT="\${1:-}"
+SAVED_PASS="$remote_pass"
+
+if echo "\$PROMPT" | grep -qiE "yes/no|fingerprint|authenticity"; then
+    echo "yes"
+elif [ -n "\$SAVED_PASS" ]; then
+    echo "\$SAVED_PASS"
+else
+    zenity --password --title="WayRemote - Autenticazione SSH" --text="\$PROMPT" 2>/dev/null
+fi
+EOF
+
+    local SSH_OPTS=(-o IPQoS=none -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -o NumberOfPasswordPrompts=1)
+
+    # 1. PRE-FLIGHT CHECK: Verifica Connettività e Credenziali SSH
+    local check_output
+    check_output=$(export DISPLAY="${DISPLAY:-:0}" SSH_ASKPASS="$askpass_script" SSH_ASKPASS_REQUIRE="force"; \
+        ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "echo __WAYREMOTE_AUTH_OK__" 2>&1) || {
+        
+        if echo "$check_output" | grep -qi "Permission denied"; then
+            zenity --error --title="Autenticazione Fallita" \
+                --text="<b>Password o Nome Utente non corretti.</b>\n\nImpossibile accedere come utente <b>${remote_user}</b> su <b>${remote_ip}</b>.\nVerifica che la password digitata sia corretta." \
+                --width=460
+        elif echo "$check_output" | grep -qi "Connection refused"; then
+            zenity --error --title="Server Non Raggiungibile" \
+                --text="<b>Connessione rifiutata da ${remote_ip}:22.</b>\n\nIl server SSH non risulta in esecuzione sul target.\nSul PC server esegui:\n<tt>sudo systemctl enable --now sshd</tt> (oppure <tt>ssh</tt>)" \
+                --width=480
+        elif echo "$check_output" | grep -qiE "No route to host|timed out|Could not resolve"; then
+            zenity --error --title="Host Non Raggiungibile" \
+                --text="<b>Impossibile raggiungere l'indirizzo IP ${remote_ip}.</b>\n\nVerifica che entrambi i PC siano accesi e collegati alla stessa rete LAN o VPN." \
+                --width=480
+        else
+            zenity --error --title="Errore Connessione SSH" \
+                --text="<b>Errore di connessione verso ${remote_user}@${remote_ip}:</b>\n\n${check_output}" \
+                --width=500
+        fi
+        rm -f "$askpass_script"
+        return 1
+    }
+
+    # 2. COSTRUZIONE DEL COMANDO REMOTO
+    local remote_cmd=""
+    case "$session_choice" in
+        niri-desktop)
+            # Desktop completo Niri con configurazione shortcut mod-key-nested Super e shell DMS / Waybar / Terminale
+            local niri_script='
+CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
+mkdir -p "$CFG_DIR"
+RUN_CFG="$CFG_DIR/niri_remote_config.kdl"
+echo "// WayRemote Nested Config" > "$RUN_CFG"
+if [ -f "$HOME/.config/niri/config.kdl" ]; then
+    echo "include \"$HOME/.config/niri/config.kdl\"" >> "$RUN_CFG"
+fi
+cat << "EOF_KDL" >> "$RUN_CFG"
+input {
+    mod-key-nested "Super"
+}
+EOF_KDL
+exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; kitty || alacritty || foot || true"
+'
+            local b64_niri
+            b64_niri=$(echo "$niri_script" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_niri' | base64 -d | bash\""
+            ;;
+        niri)
+            local niri_simple='
+CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
+mkdir -p "$CFG_DIR"
+RUN_CFG="$CFG_DIR/niri_remote_config.kdl"
+echo "// WayRemote Nested Config" > "$RUN_CFG"
+if [ -f "$HOME/.config/niri/config.kdl" ]; then
+    echo "include \"$HOME/.config/niri/config.kdl\"" >> "$RUN_CFG"
+fi
+cat << "EOF_KDL" >> "$RUN_CFG"
+input {
+    mod-key-nested "Super"
+}
+EOF_KDL
+exec niri --config "$RUN_CFG" -- sh -c "sleep 0.2; kitty || alacritty || foot || true"
+'
+            local b64_simple
+            b64_simple=$(echo "$niri_simple" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_simple' | base64 -d | bash\""
+            ;;
+        kitty|alacritty|ghostty|foot|sway|labwc)
+            remote_cmd="$session_choice"
+            ;;
+        custom)
+            remote_cmd="${custom_cmd:-niri}"
+            ;;
+        *)
+            remote_cmd="$session_choice"
+            ;;
+    esac
+
+    # 3. AVVIO SESSIONE GRAFICA WAYPIPE
+    local session_log="/tmp/wayremote_session.log"
+    rm -f "$session_log"
+
+    if command -v notify-send &>/dev/null; then
+        notify-send "WayRemote" "Avvio sessione '${session_choice}' su ${remote_user}@${remote_ip}..."
+    fi
+
+    (
+        export DISPLAY="${DISPLAY:-:0}"
+        export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+        if [ -z "${WAYLAND_DISPLAY:-}" ] || [ ! -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
+            for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
+                if [ -S "$sock" ]; then
+                    export WAYLAND_DISPLAY="$(basename "$sock")"
+                    break
+                fi
+            done
+        fi
+        export SSH_ASKPASS="$askpass_script"
+        export SSH_ASKPASS_REQUIRE="force"
+
+        echo "==> [WayRemote] Avvio sessione: $session_choice su $remote_user@$remote_ip" > "$session_log"
+
+        # Tentativo 1: compressione standard lz4
+        if waypipe -c lz4 ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+            exit 0
+        fi
+
+        # Tentativo 2: fallback sicuro senza DMABUF GPU (memoria condivisa software)
+        if waypipe --no-gpu -c lz4 ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+            exit 0
+        fi
+
+        # Tentativo 3: socket diretto senza compressione e no-gpu
+        waypipe --no-gpu ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1
+    )
+    local wp_exit=$?
+
+    if [ "$wp_exit" -ne 0 ]; then
+        if [ -s "$session_log" ]; then
+            zenity --text-info --title="Log Sessione WayRemote" \
+                --filename="$session_log" \
+                --width=620 --height=400 2>/dev/null || true
+        fi
+    fi
+
+    # Pulizia file temporanei
+    rm -f "$askpass_script"
+}
+
+# Menu principale interattivo
+main_menu() {
+    local choice
+    choice=$(zenity --list --radiolist \
+        --title="WayRemote - Remote Login Wayland" \
+        --text="Seleziona l'operazione desiderata:" \
+        --column="Seleziona" --column="Codice" --column="Operazione" \
+        TRUE  "CLIENT"  "1. Connettiti a un PC remoto (Client)" \
+        FALSE "SERVER"  "2. Configura questo PC come SERVER (riceve connessioni)" \
+        FALSE "INSTALL" "3. Installa WayRemote nel sistema (Integrazione Desktop)" \
+        --height=240 --width=520 --hide-column=2) || exit 0
+
+    case "$choice" in
+        CLIENT)
+            flow_client
+            ;;
+        SERVER)
+            flow_server
+            ;;
+        INSTALL)
+            flow_install
+            ;;
+        *)
+            exit 0
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Entry Point
+# ------------------------------------------------------------------------------
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    echo "Uso: wayremote [OPZIONE]"
+    echo
+    echo "Utility Universale per Remote Login nativo Wayland via waypipe e SSH."
+    echo
+    echo "Opzioni:"
+    echo "  --client,  -c   Avvia direttamente la procedura di connessione client"
+    echo "  --server,  -s   Configura la macchina locale come server di ricezione"
+    echo "  --install, -i   Installa e integra WayRemote nel desktop dell'utente"
+    echo "  --help,    -h   Mostra questa guida"
+    exit 0
+fi
+
+# Verifica e autoinstalla zenity e fuse2 per la GUI e il runtime se mancanti
+ensure_system_dependencies
+
+# Gestione degli altri argomenti da riga di comando
+if [ $# -gt 0 ]; then
+    case "$1" in
+        --client|-c)
+            flow_client
+            ;;
+        --server|-s)
+            flow_server
+            ;;
+        --install|-i)
+            flow_install
+            ;;
+        *)
+            echo "Opzione non riconosciuta: $1" >&2
+            echo "Usa '$0 --help' per visualizzare le opzioni disponibili." >&2
+            exit 1
+            ;;
+    esac
+else
+    main_menu
+fi
