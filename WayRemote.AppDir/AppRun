@@ -423,6 +423,7 @@ flow_client() {
             --title="WayRemote - Gestione Connessioni Desktop Remoto" \
             --text="<b>Computer Remoti Memorizzati:</b>\nSeleziona una connessione e premi <b>Connetti</b> (o fai doppio clic):" \
             --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
+            --hide-column=1 \
             "${list_args[@]}" \
             --ok-label="Connetti" \
             --cancel-label="Chiudi" \
@@ -430,6 +431,7 @@ flow_client() {
             --extra-button="Modifica" \
             --extra-button="Elimina" \
             --extra-button="Connessione Rapida" \
+            --extra-button="Altro IP..." \
             --height=380 --width=720 2>/dev/null) || zenity_status=$?
 
         # Se l'utente ha cliccato Chiudi o chiuso la finestra con la X
@@ -437,8 +439,17 @@ flow_client() {
             return 0
         fi
 
-        # Se ha premuto Connetti ma non ha selezionato alcuna riga
+        # Se ha premuto Connetti ma non ha selezionato manualmente una riga:
+        # Se c'è almeno un profilo salvato, connettiti automaticamente al primo chiedendo SOLO la password!
         if [ "$zenity_status" -eq 0 ] && [ -z "$action_out" ]; then
+            if [ "$count" -ge 1 ]; then
+                local def_id
+                def_id=$(python3 "$CONNECTIONS_PY" first-id 2>/dev/null || echo 1)
+                if connect_profile "$def_id"; then
+                    return 0
+                fi
+                continue
+            fi
             zenity --info --title="Nessuna Selezione" \
                 --text="Seleziona un computer remoto dalla lista prima di cliccare <b>Connetti</b>." \
                 --width=380 2>/dev/null || true
@@ -457,6 +468,11 @@ flow_client() {
                 ;;
             *"Connessione Rapida"*)
                 if connect_quick; then
+                    return 0
+                fi
+                ;;
+            *"Altro IP"*)
+                if connect_manual; then
                     return 0
                 fi
                 ;;
@@ -527,23 +543,31 @@ form_add_connection() {
 
 # Form Modifica Connessione
 form_edit_connection() {
-    local list_args=()
-    while IFS= read -r line; do
-        list_args+=("$line")
-    done < <(python3 "$CONNECTIONS_PY" list)
-
+    local count
+    count=$(python3 "$CONNECTIONS_PY" count 2>/dev/null || echo 0)
     local edit_id=""
-    local e_status=0
-    edit_id=$(zenity --list \
-        --title="Modifica Connessione" \
-        --text="Seleziona la connessione che desideri modificare:" \
-        --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
-        "${list_args[@]}" \
-        --ok-label="Modifica" --cancel-label="Annulla" \
-        --height=320 --width=680 2>/dev/null) || e_status=$?
 
-    if [ "$e_status" -ne 0 ] || [ -z "$edit_id" ]; then
-        return 0
+    if [ "$count" -eq 1 ]; then
+        edit_id=$(python3 "$CONNECTIONS_PY" first-id 2>/dev/null || echo 1)
+    else
+        local list_args=()
+        while IFS= read -r line; do
+            list_args+=("$line")
+        done < <(python3 "$CONNECTIONS_PY" list)
+
+        local e_status=0
+        edit_id=$(zenity --list \
+            --title="Modifica Connessione" \
+            --text="Seleziona la connessione che desideri modificare:" \
+            --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
+            --hide-column=1 \
+            "${list_args[@]}" \
+            --ok-label="Modifica" --cancel-label="Annulla" \
+            --height=320 --width=680 2>/dev/null) || e_status=$?
+
+        if [ "$e_status" -ne 0 ] || [ -z "$edit_id" ]; then
+            return 0
+        fi
     fi
 
     local get_vars
@@ -607,40 +631,94 @@ form_edit_connection() {
 
 # Form Elimina Connessione
 form_delete_connection() {
-    local list_args=()
-    while IFS= read -r line; do
-        list_args+=("$line")
-    done < <(python3 "$CONNECTIONS_PY" list)
-
+    local count
+    count=$(python3 "$CONNECTIONS_PY" count 2>/dev/null || echo 0)
     local del_id=""
-    local d_status=0
-    del_id=$(zenity --list \
-        --title="Elimina Connessione" \
-        --text="Seleziona la connessione che desideri eliminare dalla rubrica:" \
-        --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
-        "${list_args[@]}" \
-        --ok-label="Elimina" --cancel-label="Annulla" \
-        --height=320 --width=680 2>/dev/null) || d_status=$?
 
-    if [ "$d_status" -ne 0 ] || [ -z "$del_id" ]; then
-        return 0
+    if [ "$count" -eq 1 ]; then
+        del_id=$(python3 "$CONNECTIONS_PY" first-id 2>/dev/null || echo 1)
+    else
+        local list_args=()
+        while IFS= read -r line; do
+            list_args+=("$line")
+        done < <(python3 "$CONNECTIONS_PY" list)
+
+        local d_status=0
+        del_id=$(zenity --list \
+            --title="Elimina Connessione" \
+            --text="Seleziona la connessione che desideri eliminare dalla rubrica:" \
+            --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
+            --hide-column=1 \
+            "${list_args[@]}" \
+            --ok-label="Elimina" --cancel-label="Annulla" \
+            --height=320 --width=680 2>/dev/null) || d_status=$?
+
+        if [ "$d_status" -ne 0 ] || [ -z "$del_id" ]; then
+            return 0
+        fi
     fi
 
-    if zenity --question --title="Conferma Eliminazione" --text="Sei sicuro di voler eliminare la connessione selezionata (ID #$del_id)?" 2>/dev/null; then
+    local get_vars
+    get_vars=$(python3 "$CONNECTIONS_PY" get "$del_id" 2>/dev/null) || true
+    eval "$get_vars"
+    local cname="${CONN_NAME:-#$del_id}"
+
+    if zenity --question --title="Conferma Eliminazione" --text="Sei sicuro di voler eliminare la connessione <b>$cname</b>?" 2>/dev/null; then
         python3 "$CONNECTIONS_PY" delete "$del_id"
     fi
 }
 
-# Connessione rapida senza salvare
+# Connessione Rapida:
+# Quando una connessione è già registrata, NON chiede IP e utente, ma chiede SOLO la password!
 connect_quick() {
+    local count
+    count=$(python3 "$CONNECTIONS_PY" count 2>/dev/null || echo 0)
+
+    if [ "$count" -gt 0 ]; then
+        local target_id=""
+        if [ "$count" -eq 1 ]; then
+            target_id=$(python3 "$CONNECTIONS_PY" first-id 2>/dev/null || echo 1)
+        else
+            # Più profili memorizzati: mostra selezione rapida
+            local list_args=()
+            while IFS= read -r line; do
+                list_args+=("$line")
+            done < <(python3 "$CONNECTIONS_PY" list)
+
+            local pick_status=0
+            target_id=$(zenity --list \
+                --title="Connessione Rapida" \
+                --text="Seleziona il computer remoto a cui connetterti:" \
+                --column="ID" --column="Nome Server" --column="Indirizzo IP / Host" --column="Utente" --column="Tipo Sessione" \
+                --hide-column=1 \
+                "${list_args[@]}" \
+                --ok-label="Connetti" --cancel-label="Annulla" \
+                --height=320 --width=680 2>/dev/null) || pick_status=$?
+
+            if [ "$pick_status" -ne 0 ] || [ -z "$target_id" ]; then
+                return 1
+            fi
+        fi
+
+        # Connessione registrata: chiede SOLO la password tramite connect_profile
+        connect_profile "$target_id"
+        return $?
+    fi
+
+    # Fallback se non ci sono ancora connessioni salvate
+    connect_manual
+}
+
+# Connessione manuale a un nuovo host non salvato
+connect_manual() {
     local remote_ip=""
     local r_status=0
-    remote_ip=$(zenity --entry --title="Connessione Rapida" --text="Inserisci l'indirizzo IP del server:" --entry-text="192.168.4.162" 2>/dev/null) || r_status=$?
+    remote_ip=$(zenity --entry --title="Connessione Manuale" --text="Inserisci l'indirizzo IP del server:" --entry-text="192.168.1." 2>/dev/null) || r_status=$?
     if [ "$r_status" -ne 0 ] || [ -z "$remote_ip" ]; then return 1; fi
 
     local remote_user=""
     local u_status=0
-    remote_user=$(zenity --entry --title="Connessione Rapida" --text="Inserisci il nome utente:" --entry-text="$USER" 2>/dev/null) || u_status=$?
+    remote_user=$(zenity --entry --title="Connessione Manuale" --text="Inserisci il nome utente:" --entry-text="$USER" 2>/dev/null) || u_status=$?
     if [ "$u_status" -ne 0 ] || [ -z "$remote_user" ]; then return 1; fi
 
     local remote_pass=""
@@ -652,7 +730,7 @@ connect_quick() {
     return 0
 }
 
-# Connessione a un profilo memorizzato
+# Connessione a un profilo memorizzato (NON chiede IP o utente, chiede SOLO la password!)
 connect_profile() {
     local prof_id="$1"
     local get_vars

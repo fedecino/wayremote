@@ -17,9 +17,11 @@ if [ ! -d "$APPDIR" ]; then
     exit 1
 fi
 
-# 2. Permessi corretti
+# 2. Pulizia e Permessi corretti
 echo "==> [WayRemote] Impostazione permessi eseguibili su AppRun..."
+rm -rf "$APPDIR"/__pycache__ "$APPDIR"/*.pyc
 chmod +x "$APPDIR/AppRun"
+chmod +x "$APPDIR/connections.py"
 chmod 644 "$APPDIR/wayremote.desktop"
 if [ -f "$APPDIR/wayremote.png" ]; then
     chmod 644 "$APPDIR/wayremote.png"

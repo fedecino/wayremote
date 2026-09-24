@@ -72,15 +72,33 @@ def cmd_list():
         print(c.get("user", ""))
         print(sess_label)
 
+def cmd_first_id():
+    conns = load_connections()
+    if conns:
+        print(conns[0].get("id", "1"))
+        return 0
+    return 1
+
 def cmd_get(conn_id):
     conns = load_connections()
+    if not conns:
+        return 1
+    if str(conn_id).lower() in ("first", "default", "0"):
+        c = conns[0]
+        print(f'CONN_ID="{c.get("id", "")}"')
+        print(f'CONN_NAME="{c.get("name", "")}"')
+        print(f'CONN_HOST="{c.get("host", "")}"')
+        print(f'CONN_USER="{c.get("user", "")}"')
+        print(f'CONN_SESSION="{c.get("session", "auto")}"')
+        print(f'CONN_CUSTOM_CMD="{c.get("custom_cmd", "")}"')
+        return 0
     for c in conns:
         if str(c.get("id")) == str(conn_id):
             print(f'CONN_ID="{c.get("id", "")}"')
             print(f'CONN_NAME="{c.get("name", "")}"')
             print(f'CONN_HOST="{c.get("host", "")}"')
             print(f'CONN_USER="{c.get("user", "")}"')
-            print(f'CONN_SESSION="{c.get("session", "niri-desktop")}"')
+            print(f'CONN_SESSION="{c.get("session", "auto")}"')
             print(f'CONN_CUSTOM_CMD="{c.get("custom_cmd", "")}"')
             return 0
     return 1
@@ -156,6 +174,8 @@ if __name__ == "__main__":
         cmd_delete(sys.argv[2])
     elif cmd == "count":
         cmd_count()
+    elif cmd == "first-id":
+        sys.exit(cmd_first_id())
     elif cmd == "init":
         init_defaults()
     else:
