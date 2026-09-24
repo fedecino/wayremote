@@ -111,6 +111,9 @@ ensure_system_dependencies() {
             foot)
                 "$term" -T "WayRemote - Setup Dipendenze" bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
                 ;;
+            ptyxis)
+                "$term" -- bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
+                ;;
             wezterm)
                 "$term" start -- bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
                 ;;
@@ -120,7 +123,7 @@ ensure_system_dependencies() {
             konsole)
                 "$term" -p tabtitle="WayRemote - Setup Dipendenze" -e bash -c "echo '==> [WayRemote] Installazione dipendenze ($missing_pkgs)...'; sudo $install_cmd; sleep 1"
                 ;;
-            xfce4-terminal|lxterminal)
+            xfce4-terminal|mate-terminal|lxterminal|terminator|tilix)
                 "$term" -T "WayRemote - Setup Dipendenze" -e "bash -c 'echo [WayRemote] Installazione dipendenze...; sudo $install_cmd; sleep 1'"
                 ;;
             *)
@@ -148,19 +151,35 @@ detect_distro() {
     fi
 }
 
-# Rilevamento del miglior emulatore di terminale disponibile
+# Rilevamento di qualsiasi emulatore di terminale disponibile
 find_terminal() {
+    # 1. Variabile d'ambiente $TERMINAL se impostata dall'utente
+    if [ -n "${TERMINAL:-}" ] && command -v "$TERMINAL" &>/dev/null; then
+        echo "$TERMINAL"
+        return 0
+    fi
+
+    # 2. xdg-terminal-exec se disponibile
+    if command -v xdg-terminal-exec &>/dev/null; then
+        echo "xdg-terminal-exec"
+        return 0
+    fi
+
     local terminals=(
         "ghostty"
         "kitty"
         "alacritty"
         "foot"
+        "ptyxis"
         "wezterm"
         "gnome-terminal"
         "konsole"
         "xfce4-terminal"
+        "mate-terminal"
         "lxterminal"
         "x-terminal-emulator"
+        "terminator"
+        "tilix"
         "xterm"
     )
 
@@ -499,7 +518,7 @@ form_add_connection() {
         --add-entry="Indirizzo IP o Host (es. 192.168.4.162)" \
         --add-entry="Nome Utente (es. $USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Rilevamento Automatico DE (Consigliato)|Niri (Desktop Completo con Barra DMS)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|Terminale Kitty|Terminale Alacritty|Terminale Ghostty|Terminale Foot|Comando Personalizzato" \
+        --combo-values="Rilevamento Automatico DE (Consigliato)|Niri (Desktop Completo con Barra DMS)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
         --separator="|" 2>/dev/null) || f_status=$?
 
     if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
@@ -522,16 +541,20 @@ form_add_connection() {
     case "$sess_label" in
         *"Rilevamento Automatico"*) session_code="auto" ;;
         *"Desktop Completo"*) session_code="niri-desktop" ;;
-        *"GNOME"*) session_code="gnome" ;;
+        *"GNOME Desktop"*) session_code="gnome" ;;
         *"Plasma"*) session_code="plasma" ;;
         *"Sway"*) session_code="sway" ;;
         *"Hyprland"*) session_code="hyprland" ;;
         *"Labwc"*) session_code="labwc" ;;
         *"Wayfire"*) session_code="wayfire" ;;
+        *"Terminale Remoto"*) session_code="terminal" ;;
+        *"Ghostty"*) session_code="ghostty" ;;
         *"Kitty"*) session_code="kitty" ;;
         *"Alacritty"*) session_code="alacritty" ;;
-        *"Ghostty"*) session_code="ghostty" ;;
         *"Foot"*) session_code="foot" ;;
+        *"Ptyxis"*) session_code="ptyxis" ;;
+        *"GNOME"*) session_code="gnome-terminal" ;;
+        *"Konsole"*) session_code="konsole" ;;
         *"Personalizzato"*)
             session_code="custom"
             custom_cmd=$(zenity --entry --title="Comando Personalizzato" --text="Inserisci il comando da eseguire sul server:" --entry-text="niri" 2>/dev/null || true)
@@ -586,7 +609,7 @@ form_edit_connection() {
         --add-entry="Indirizzo IP o Host (attuale: $CONN_HOST)" \
         --add-entry="Nome Utente (attuale: $CONN_USER)" \
         --add-combo="Sessione Remota" \
-        --combo-values="Mantieni attuale ($CONN_SESSION)|Rilevamento Automatico DE (Consigliato)|Niri (Desktop Completo con Barra DMS)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|Terminale Kitty|Terminale Alacritty|Terminale Ghostty|Terminale Foot|Comando Personalizzato" \
+        --combo-values="Mantieni attuale ($CONN_SESSION)|Rilevamento Automatico DE (Consigliato)|Niri (Desktop Completo con Barra DMS)|GNOME Desktop (Shell Wayland)|KDE Plasma (KWin Wayland)|Sway Compositor|Hyprland Compositor|Labwc Compositor|Wayfire Compositor|Terminale Remoto (Rilevamento Automatico)|Terminale Ghostty|Terminale Kitty|Terminale Alacritty|Terminale Foot|Terminale Ptyxis|Terminale GNOME|Terminale Konsole|Comando Personalizzato" \
         --separator="|" 2>/dev/null) || f_status=$?
 
     if [ "$f_status" -ne 0 ] || [ -z "$form_res" ]; then
@@ -610,16 +633,20 @@ form_edit_connection() {
         *"Mantieni"*) ;;
         *"Rilevamento Automatico"*) session_code="auto" ;;
         *"Desktop Completo"*) session_code="niri-desktop" ;;
-        *"GNOME"*) session_code="gnome" ;;
+        *"GNOME Desktop"*) session_code="gnome" ;;
         *"Plasma"*) session_code="plasma" ;;
         *"Sway"*) session_code="sway" ;;
         *"Hyprland"*) session_code="hyprland" ;;
         *"Labwc"*) session_code="labwc" ;;
         *"Wayfire"*) session_code="wayfire" ;;
+        *"Terminale Remoto"*) session_code="terminal" ;;
+        *"Ghostty"*) session_code="ghostty" ;;
         *"Kitty"*) session_code="kitty" ;;
         *"Alacritty"*) session_code="alacritty" ;;
-        *"Ghostty"*) session_code="ghostty" ;;
         *"Foot"*) session_code="foot" ;;
+        *"Ptyxis"*) session_code="ptyxis" ;;
+        *"GNOME"*) session_code="gnome-terminal" ;;
+        *"Konsole"*) session_code="konsole" ;;
         *"Personalizzato"*)
             session_code="custom"
             custom_cmd=$(zenity --entry --title="Comando Personalizzato" --text="Inserisci il comando da eseguire sul server:" --entry-text="${custom_cmd:-niri}" 2>/dev/null || true)
@@ -852,6 +879,24 @@ if [ -z "$de" ]; then
     fi
 fi
 
+# Rilevamento automatico di qualsiasi emulatore di terminale presente sul server
+term_bin=""
+if [ -n "$TERMINAL" ] && command -v "$TERMINAL" >/dev/null 2>&1; then
+    term_bin="$TERMINAL"
+elif command -v xdg-terminal-exec >/dev/null 2>&1; then
+    term_bin="xdg-terminal-exec"
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    term_bin="x-terminal-emulator"
+else
+    for cand_t in ghostty kitty alacritty foot ptyxis wezterm gnome-terminal konsole xfce4-terminal mate-terminal lxterminal terminator tilix xterm rxvt urxvt; do
+        if command -v "$cand_t" >/dev/null 2>&1; then
+            term_bin="$cand_t"
+            break
+        fi
+    done
+fi
+term_bin="${term_bin:-xterm}"
+
 case "$de" in
     niri)
         CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
@@ -861,12 +906,13 @@ case "$de" in
         if [ -f "$HOME/.config/niri/config.kdl" ]; then
             echo "include \"$HOME/.config/niri/config.kdl\"" >> "$RUN_CFG"
         fi
-        cat << "EOF_KDL" >> "$RUN_CFG"
+        cat << EOF_KDL >> "$RUN_CFG"
 binds {
     Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Mod+Return { spawn "$term_bin"; }
 }
 EOF_KDL
-        exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; kitty || alacritty || foot || true"
+        exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; if [ -n \"$term_bin\" ] && command -v \"$term_bin\" >/dev/null 2>&1; then \"$term_bin\" & fi; true"
         ;;
     gnome)
         exec gnome-shell --wayland
@@ -887,7 +933,7 @@ EOF_KDL
         exec wayfire
         ;;
     *)
-        exec kitty || exec alacritty || exec ghostty || exec foot || exec xterm
+        exec "$term_bin"
         ;;
 esac
 '
@@ -904,12 +950,31 @@ echo "// WayRemote Nested Config" > "$RUN_CFG"
 if [ -f "$HOME/.config/niri/config.kdl" ]; then
     echo "include \"$HOME/.config/niri/config.kdl\"" >> "$RUN_CFG"
 fi
-cat << "EOF_KDL" >> "$RUN_CFG"
+
+term_bin=""
+if [ -n "$TERMINAL" ] && command -v "$TERMINAL" >/dev/null 2>&1; then
+    term_bin="$TERMINAL"
+elif command -v xdg-terminal-exec >/dev/null 2>&1; then
+    term_bin="xdg-terminal-exec"
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    term_bin="x-terminal-emulator"
+else
+    for cand_t in ghostty kitty alacritty foot ptyxis wezterm gnome-terminal konsole xfce4-terminal mate-terminal lxterminal terminator tilix xterm rxvt urxvt; do
+        if command -v "$cand_t" >/dev/null 2>&1; then
+            term_bin="$cand_t"
+            break
+        fi
+    done
+fi
+term_bin="${term_bin:-xterm}"
+
+cat << EOF_KDL >> "$RUN_CFG"
 binds {
     Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Mod+Return { spawn "$term_bin"; }
 }
 EOF_KDL
-exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; kitty || alacritty || foot || true"
+exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; if [ -n \"$term_bin\" ] && command -v \"$term_bin\" >/dev/null 2>&1; then \"$term_bin\" & fi; true"
 '
             local b64_niri
             b64_niri=$(echo "$niri_script" | base64 -w 0)
@@ -933,7 +998,31 @@ exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then 
         wayfire)
             remote_cmd="wayfire"
             ;;
-        kitty|alacritty|ghostty|foot)
+        terminal)
+            local term_script='
+term_bin=""
+if [ -n "$TERMINAL" ] && command -v "$TERMINAL" >/dev/null 2>&1; then
+    term_bin="$TERMINAL"
+elif command -v xdg-terminal-exec >/dev/null 2>&1; then
+    term_bin="xdg-terminal-exec"
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    term_bin="x-terminal-emulator"
+else
+    for cand_t in ghostty kitty alacritty foot ptyxis wezterm gnome-terminal konsole xfce4-terminal mate-terminal lxterminal terminator tilix xterm rxvt urxvt; do
+        if command -v "$cand_t" >/dev/null 2>&1; then
+            term_bin="$cand_t"
+            break
+        fi
+    done
+fi
+term_bin="${term_bin:-xterm}"
+exec "$term_bin"
+'
+            local b64_term
+            b64_term=$(echo "$term_script" | base64 -w 0)
+            remote_cmd="bash -c \"echo '$b64_term' | base64 -d | bash\""
+            ;;
+        ghostty|kitty|alacritty|foot|ptyxis|wezterm|gnome-terminal|konsole|xfce4-terminal|xterm)
             remote_cmd="$session_choice"
             ;;
         custom)

@@ -20,10 +20,14 @@ SESSION_PRESETS = {
     "hyprland": "Hyprland Compositor",
     "labwc": "Labwc Compositor",
     "wayfire": "Wayfire Compositor",
+    "terminal": "Terminale Remoto (Rilevamento Automatico)",
+    "ghostty": "Terminale Ghostty Remoto",
     "kitty": "Terminale Kitty Remoto",
     "alacritty": "Terminale Alacritty Remoto",
-    "ghostty": "Terminale Ghostty Remoto",
     "foot": "Terminale Foot Remoto",
+    "ptyxis": "Terminale Ptyxis Remoto",
+    "gnome-terminal": "Terminale GNOME Remoto",
+    "konsole": "Terminale Konsole Remoto",
     "custom": "Comando Personalizzato"
 }
 
