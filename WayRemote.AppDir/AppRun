@@ -202,40 +202,40 @@ flow_server() {
     case "$DISTRO_ID" in
         arch|cachyos|endeavouros|manjaro|artix)
             pkg_manager="pacman"
-            install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2 xorg-xauth"
+            install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2 xorg-xauth xwayland-satellite ffmpeg intel-media-driver libva-mesa-driver libva-utils"
             service_name="sshd"
             ;;
         debian|ubuntu|linuxmint|pop|elementary|zorin)
             pkg_manager="apt"
-            install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2 xauth"
+            install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2 xauth ffmpeg va-driver-all vainfo mesa-va-drivers"
             service_name="ssh"
             ;;
         fedora|rhel|centos|almalinux|rocky)
             pkg_manager="dnf"
-            install_cmd="dnf install -y openssh-server waypipe fuse-libs xorg-x11-xauth"
+            install_cmd="dnf install -y openssh-server waypipe fuse-libs xorg-x11-xauth ffmpeg mesa-va-drivers libva-utils intel-media-driver"
             service_name="sshd"
             ;;
         opensuse*|suse)
             pkg_manager="zypper"
-            install_cmd="zypper install -y openssh waypipe libfuse2 xauth"
+            install_cmd="zypper install -y openssh waypipe libfuse2 xauth ffmpeg libva-utils"
             service_name="sshd"
             ;;
         *)
             if [[ "$DISTRO_LIKE" =~ arch ]]; then
                 pkg_manager="pacman"
-                install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2 xorg-xauth"
+                install_cmd="pacman -S --noconfirm --needed openssh waypipe fuse2 xorg-xauth xwayland-satellite ffmpeg intel-media-driver libva-mesa-driver libva-utils"
                 service_name="sshd"
             elif [[ "$DISTRO_LIKE" =~ debian|ubuntu ]]; then
                 pkg_manager="apt"
-                install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2 xauth"
+                install_cmd="apt-get update && apt-get install -y openssh-server waypipe libfuse2 xauth ffmpeg va-driver-all vainfo mesa-va-drivers"
                 service_name="ssh"
             elif [[ "$DISTRO_LIKE" =~ fedora|rhel ]]; then
                 pkg_manager="dnf"
-                install_cmd="dnf install -y openssh-server waypipe fuse-libs xorg-x11-xauth"
+                install_cmd="dnf install -y openssh-server waypipe fuse-libs xorg-x11-xauth ffmpeg mesa-va-drivers libva-utils intel-media-driver"
                 service_name="sshd"
             else
                 zenity --error --title="Distribuzione non supportata" \
-                    --text="Distribuzione rilevata ($DISTRO_ID) non supportata automaticamente per l'installazione dei pacchetti.\n\nInstalla manualmente: openssh, waypipe e xauth, poi avvia il servizio SSH." \
+                    --text="Distribuzione rilevata ($DISTRO_ID) non supportata automaticamente per l'installazione dei pacchetti.\n\nInstalla manualmente: openssh, waypipe, ffmpeg e driver VA-API/xauth, poi avvia il servizio SSH." \
                     --width=450
                 return 1
             fi
@@ -244,8 +244,8 @@ flow_server() {
 
     # Conferma utente
     if ! zenity --question --title="Configurazione Server WayRemote" \
-        --text="<b>Distribuzione rilevata:</b> ${DISTRO_ID} (${pkg_manager})\n\nVerranno installati:\n• Server OpenSSH\n• Waypipe (inoltro sessioni Wayland)\n• Supporto X11 Forwarding (xauth)\n\nVuoi procedere con l'installazione e l'avvio del servizio SSH?" \
-        --ok-label="Procedi" --cancel-label="Annulla" --width=420; then
+        --text="<b>Distribuzione rilevata:</b> ${DISTRO_ID} (${pkg_manager})\n\nVerranno installati e configurati per le massime prestazioni:\n• <b>Server OpenSSH</b> (ottimizzato per low-latency e socket forwarding)\n• <b>Waypipe</b> (inoltro sessioni grafiche Wayland)\n• <b>Accelerazione Hardware Video GPU</b> (FFmpeg e driver VA-API Intel/AMD/Nvidia)\n• <b>Supporto X11 Forwarding</b> (xauth, xwayland-satellite)\n• <b>Permessi hardware utente</b> (gruppi video e render)\n\nVuoi procedere con l'installazione e l'avvio del servizio SSH?" \
+        --ok-label="Procedi" --cancel-label="Annulla" --width=460; then
         return 0
     fi
 
@@ -267,17 +267,26 @@ flow_server() {
             exit 1
         fi
 
-        echo "50"; echo "# Configurazione di SSH (autenticazione password e forwarding)..."
+        echo "50"; echo "# Configurazione di SSH e accelerazione hardware GPU..."
         echo "$sudo_pass" | sudo -S -- sh -c '
             mkdir -p /etc/ssh/sshd_config.d
             cat << "EOF" > /etc/ssh/sshd_config.d/wayremote.conf
-# WayRemote SSH Configuration
+# WayRemote High-Performance SSH Configuration
 PasswordAuthentication yes
 KbdInteractiveAuthentication yes
 UsePAM yes
 X11Forwarding yes
-IPQoS none
+StreamLocalBindUnlink yes
+TCPKeepAlive yes
+Compression no
+IPQoS lowdelay
 EOF
+            # Aggiunge l'\''utente corrente ai gruppi render e video per abilitare l'\''accesso diretto alla GPU
+            for grp in render video; do
+                if getent group "$grp" >/dev/null 2>&1; then
+                    usermod -aG "$grp" "'"$USER"'" 2>/dev/null || true
+                fi
+            done
         ' 2>&1 || true
 
         echo "70"; echo "# Abilitazione e riavvio del servizio SSH ($service_name)..."
@@ -859,7 +868,16 @@ else
 fi
 EOF
 
-    local SSH_OPTS=(-o IPQoS=none -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -o NumberOfPasswordPrompts=1)
+    local SSH_OPTS=(
+        -o StrictHostKeyChecking=accept-new
+        -o ConnectTimeout=8
+        -o NumberOfPasswordPrompts=1
+        -o Compression=no
+        -o Ciphers=aes128-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
+        -o IPQoS=lowdelay
+        -o TCPKeepAlive=yes
+        -o ServerAliveInterval=15
+    )
     if [ -n "$remote_pass" ]; then
         # Se la password è specificata, forza autenticazione password
         # ed escludi chiavi pubbliche per evitare "Too many authentication failures" da ssh-agent
@@ -898,11 +916,13 @@ EOF
         return 1
     }
 
-    # 2. PROBE AMBIENTE SERVER: Rilevamento automatico Wayland vs X11
+    # 2. PROBE AMBIENTE SERVER: Rilevamento automatico Wayland vs X11 e accelerazione video
     local server_info
     server_info=$(export SSH_ASKPASS="$askpass_script" SSH_ASKPASS_REQUIRE="force"; \
         ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" '
 has_waypipe=0; command -v waypipe >/dev/null 2>&1 && has_waypipe=1
+has_wp_video=0; waypipe -V 2>/dev/null | grep -qiE "video:\s*true" && has_wp_video=1
+has_xwls=0; command -v xwayland-satellite >/dev/null 2>&1 && has_xwls=1
 has_wayland_sess=0; ls /usr/share/wayland-sessions/*.desktop >/dev/null 2>&1 && has_wayland_sess=1
 has_xsess=0; ls /usr/share/xsessions/*.desktop >/dev/null 2>&1 && has_xsess=1
 sys_env=$(systemctl --user show-environment 2>/dev/null || true)
@@ -915,15 +935,27 @@ for cand_wb in niri gnome-shell kwin_wayland cosmic-session sway Hyprland hyprla
         break
     fi
 done
-echo "WAYPIPE=$has_waypipe;WAYLAND_SESS=$has_wayland_sess;WAYLAND_BIN=$has_wayland_bin;XSESS=$has_xsess;XDG_TYPE=$xdg_type"
-' 2>/dev/null || echo "WAYPIPE=0;WAYLAND_SESS=0;WAYLAND_BIN=0;XSESS=0;XDG_TYPE=unknown")
+echo "WAYPIPE=$has_waypipe;WP_VIDEO=$has_wp_video;XWLS=$has_xwls;WAYLAND_SESS=$has_wayland_sess;WAYLAND_BIN=$has_wayland_bin;XSESS=$has_xsess;XDG_TYPE=$xdg_type"
+' 2>/dev/null || echo "WAYPIPE=0;WP_VIDEO=0;XWLS=0;WAYLAND_SESS=0;WAYLAND_BIN=0;XSESS=0;XDG_TYPE=unknown")
 
-    local srv_waypipe=0 srv_wayland_sess=0 srv_wayland_bin=0 srv_xsess=0 srv_xdg_type="unknown"
+    local srv_waypipe=0 srv_wp_video=0 srv_xwls=0 srv_wayland_sess=0 srv_wayland_bin=0 srv_xsess=0 srv_xdg_type="unknown"
     [[ "$server_info" =~ WAYPIPE=([0-9]) ]] && srv_waypipe="${BASH_REMATCH[1]}"
+    [[ "$server_info" =~ WP_VIDEO=([0-9]) ]] && srv_wp_video="${BASH_REMATCH[1]}"
+    [[ "$server_info" =~ XWLS=([0-9]) ]] && srv_xwls="${BASH_REMATCH[1]}"
     [[ "$server_info" =~ WAYLAND_SESS=([0-9]) ]] && srv_wayland_sess="${BASH_REMATCH[1]}"
     [[ "$server_info" =~ WAYLAND_BIN=([0-9]) ]] && srv_wayland_bin="${BASH_REMATCH[1]}"
     [[ "$server_info" =~ XSESS=([0-9]) ]] && srv_xsess="${BASH_REMATCH[1]}"
     [[ "$server_info" =~ XDG_TYPE=([a-zA-Z0-9_-]+) ]] && srv_xdg_type="${BASH_REMATCH[1]}"
+
+    local cli_wp_video=0
+    if command -v waypipe >/dev/null 2>&1 && waypipe -V 2>/dev/null | grep -qiE "video:\s*true"; then
+        cli_wp_video=1
+    fi
+
+    local is_lan=0
+    if [[ "$remote_ip" =~ ^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.|localhost) ]]; then
+        is_lan=1
+    fi
 
     local conn_mode="wayland"
     if [ "$session_choice" = "x11" ]; then
@@ -1042,9 +1074,26 @@ exec "$term_bin"
             auto|"")
                 # Script intelligente di rilevamento automatico del DE/WM sul server remoto
                 local auto_script='
+# Ottimizzazioni Ambiente WayRemote: previene freeze da AT-SPI e abilita Wayland
+export NO_AT_SPI=1
+export GTK_A11Y=none
+export QT_ACCESSIBILITY=0
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+export CLUTTER_BACKEND="wayland"
+export SDL_VIDEODRIVER="wayland"
+export ELECTRON_OZONE_PLATFORM_HINT="auto"
+export CHROME_OZONE_PLATFORM_HINT="auto"
+export MOZ_ENABLE_WAYLAND=1
+export _JAVA_AWT_WM_NONREPARENTING=1
+
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     bus_cand="/run/user/$(id -u)/bus"
-    [ -S "$bus_cand" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+    if [ -S "$bus_cand" ]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+    elif command -v dbus-launch >/dev/null 2>&1; then
+        eval "$(dbus-launch --sh-syntax 2>/dev/null)"
+    fi
 fi
 
 sys_env=$(systemctl --user show-environment 2>/dev/null || true)
@@ -1232,7 +1281,7 @@ binds {
     Mod+Return { spawn "$term_bin"; }
 }
 EOF_KDL
-        exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; if [ -n \"$term_bin\" ] && command -v \"$term_bin\" >/dev/null 2>&1; then \"$term_bin\" & fi; true"
+        exec niri --config "$RUN_CFG" -- sh -c "if command -v xwayland-satellite >/dev/null 2>&1; then xwayland-satellite & fi; if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; if [ -n \"$term_bin\" ] && command -v \"$term_bin\" >/dev/null 2>&1; then \"$term_bin\" & fi; true"
         ;;
     sway)
         exec sway
@@ -1427,6 +1476,28 @@ fi
                 ;;
             niri-desktop)
                 local niri_script='
+# Ottimizzazioni Ambiente WayRemote
+export NO_AT_SPI=1
+export GTK_A11Y=none
+export QT_ACCESSIBILITY=0
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+export CLUTTER_BACKEND="wayland"
+export SDL_VIDEODRIVER="wayland"
+export ELECTRON_OZONE_PLATFORM_HINT="auto"
+export CHROME_OZONE_PLATFORM_HINT="auto"
+export MOZ_ENABLE_WAYLAND=1
+export _JAVA_AWT_WM_NONREPARENTING=1
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    if [ -S "$bus_cand" ]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+    elif command -v dbus-launch >/dev/null 2>&1; then
+        eval "$(dbus-launch --sh-syntax 2>/dev/null)"
+    fi
+fi
+
 CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wayremote"
 mkdir -p "$CFG_DIR"
 RUN_CFG="$CFG_DIR/niri_remote_config.kdl"
@@ -1458,7 +1529,7 @@ binds {
     Mod+Return { spawn "$term_bin"; }
 }
 EOF_KDL
-exec niri --config "$RUN_CFG" -- sh -c "if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; if [ -n \"$term_bin\" ] && command -v \"$term_bin\" >/dev/null 2>&1; then \"$term_bin\" & fi; true"
+exec niri --config "$RUN_CFG" -- sh -c "if command -v xwayland-satellite >/dev/null 2>&1; then xwayland-satellite & fi; if command -v dms >/dev/null 2>&1; then dms run & fi; if command -v waybar >/dev/null 2>&1; then waybar & fi; sleep 0.3; if [ -n \"$term_bin\" ] && command -v \"$term_bin\" >/dev/null 2>&1; then \"$term_bin\" & fi; true"
 '
                 local b64_niri
                 b64_niri=$(echo "$niri_script" | base64 -w 0)
@@ -1541,6 +1612,28 @@ exec xfce4-session
                 ;;
             terminal)
                 local term_script='
+# Ottimizzazioni Ambiente WayRemote
+export NO_AT_SPI=1
+export GTK_A11Y=none
+export QT_ACCESSIBILITY=0
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+export CLUTTER_BACKEND="wayland"
+export SDL_VIDEODRIVER="wayland"
+export ELECTRON_OZONE_PLATFORM_HINT="auto"
+export CHROME_OZONE_PLATFORM_HINT="auto"
+export MOZ_ENABLE_WAYLAND=1
+export _JAVA_AWT_WM_NONREPARENTING=1
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    if [ -S "$bus_cand" ]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+    elif command -v dbus-launch >/dev/null 2>&1; then
+        eval "$(dbus-launch --sh-syntax 2>/dev/null)"
+    fi
+fi
+
 term_bin=""
 if [ -n "$TERMINAL" ] && command -v "$TERMINAL" >/dev/null 2>&1; then
     term_bin="$TERMINAL"
@@ -1564,15 +1657,70 @@ exec "$term_bin"
                 remote_cmd="bash -c \"echo '$b64_term' | base64 -d | bash\""
                 ;;
             ghostty|kitty|alacritty|foot|ptyxis|wezterm|gnome-terminal|konsole|xfce4-terminal|xterm)
-                remote_cmd="$session_choice"
+                local st_script='
+export NO_AT_SPI=1
+export GTK_A11Y=none
+export QT_ACCESSIBILITY=0
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+export CLUTTER_BACKEND="wayland"
+export SDL_VIDEODRIVER="wayland"
+export ELECTRON_OZONE_PLATFORM_HINT="auto"
+export CHROME_OZONE_PLATFORM_HINT="auto"
+export MOZ_ENABLE_WAYLAND=1
+export _JAVA_AWT_WM_NONREPARENTING=1
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    if [ -S "$bus_cand" ]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+    elif command -v dbus-launch >/dev/null 2>&1; then
+        eval "$(dbus-launch --sh-syntax 2>/dev/null)"
+    fi
+fi
+exec '"$session_choice"'
+'
+                local b64_st
+                b64_st=$(echo "$st_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_st' | base64 -d | bash\""
                 ;;
             custom)
-                remote_cmd="${custom_cmd:-niri}"
+                local target_cmd="${custom_cmd:-niri}"
+                local cust_script='
+export NO_AT_SPI=1
+export GTK_A11Y=none
+export QT_ACCESSIBILITY=0
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+export CLUTTER_BACKEND="wayland"
+export SDL_VIDEODRIVER="wayland"
+export ELECTRON_OZONE_PLATFORM_HINT="auto"
+export CHROME_OZONE_PLATFORM_HINT="auto"
+export MOZ_ENABLE_WAYLAND=1
+export _JAVA_AWT_WM_NONREPARENTING=1
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    bus_cand="/run/user/$(id -u)/bus"
+    if [ -S "$bus_cand" ]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_cand"
+    elif command -v dbus-launch >/dev/null 2>&1; then
+        eval "$(dbus-launch --sh-syntax 2>/dev/null)"
+    fi
+fi
+exec '"$target_cmd"'
+'
+                local b64_cust
+                b64_cust=$(echo "$cust_script" | base64 -w 0)
+                remote_cmd="bash -c \"echo '$b64_cust' | base64 -d | bash\""
                 ;;
             *)
                 remote_cmd="$session_choice"
                 ;;
         esac
+    fi
+
+    # Garantisci che qualsiasi comando remoto erediti l'ambiente ottimizzato (evita freeze D-Bus/AT-SPI)
+    if [[ ! "$remote_cmd" =~ ^bash\ -c ]]; then
+        local raw_wrap="export NO_AT_SPI=1; export GTK_A11Y=none; export QT_ACCESSIBILITY=0; export GDK_BACKEND='wayland,x11,*'; export QT_QPA_PLATFORM='wayland;xcb'; export CLUTTER_BACKEND='wayland'; export SDL_VIDEODRIVER='wayland'; export ELECTRON_OZONE_PLATFORM_HINT='auto'; export CHROME_OZONE_PLATFORM_HINT='auto'; export MOZ_ENABLE_WAYLAND=1; export _JAVA_AWT_WM_NONREPARENTING=1; [ -z \"\$DBUS_SESSION_BUS_ADDRESS\" ] && [ -S \"/run/user/\$(id -u)/bus\" ] && export DBUS_SESSION_BUS_ADDRESS=\"unix:path=/run/user/\$(id -u)/bus\"; "
+        remote_cmd="bash -c \"${raw_wrap} exec ${remote_cmd}\""
     fi
 
     # 4. AVVIO SESSIONE GRAFICA (WAYPIPE O SSH X11 FORWARDING)
@@ -1591,30 +1739,76 @@ exec "$term_bin"
         export SSH_ASKPASS="$askpass_script"
         export SSH_ASKPASS_REQUIRE="force"
 
+        local wp_extra=()
+        if [ "$srv_xwls" -eq 1 ]; then
+            wp_extra+=(--xwls)
+        fi
+
         if [ "$conn_mode" = "wayland" ]; then
             echo "==> [WayRemote] Avvio sessione Wayland ($session_choice) su $remote_user@$remote_ip" > "$session_log"
 
-            # Tentativo 1: compressione standard lz4
-            if waypipe -c lz4 ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
-                exit 0
+            local can_use_video=0
+            if [ "$cli_wp_video" -eq 1 ] && [ "$srv_wp_video" -eq 1 ]; then
+                can_use_video=1
             fi
 
-            # Tentativo 2: fallback sicuro senza DMABUF GPU (memoria condivisa software)
-            if waypipe --no-gpu -c lz4 ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
-                exit 0
-            fi
+            if [ "$is_lan" -eq 1 ]; then
+                echo "==> [WayRemote] Rete LAN rilevata: Ottimizzazione High-Throughput & Low-Latency" >> "$session_log"
 
-            # Tentativo 3: socket diretto senza compressione e no-gpu
-            if waypipe --no-gpu ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
-                exit 0
+                if [ "$can_use_video" -eq 1 ]; then
+                    echo "==> [WayRemote] Accelerazione GPU Hardware (Video H.264 via VA-API/NVENC) attiva" >> "$session_log"
+                    # Tentativo 1 (LAN): Hardware Video Encoding H.264 con bitrate ottimizzato per LAN
+                    if waypipe --threads=0 --video=h264,hw,bpf=800000 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                        exit 0
+                    fi
+
+                    # Tentativo 2 (LAN): Software Video Encoding H.264 fallback
+                    if waypipe --threads=0 --video=h264,bpf=600000 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                        exit 0
+                    fi
+                fi
+
+                # Tentativo 3 (LAN): Fallback compressione LZ4 (se video non supportato)
+                if waypipe --threads=0 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                    exit 0
+                fi
+
+                # Tentativo 4 (LAN): Fallback memoria software senza GPU
+                if waypipe --threads=0 --no-gpu -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                    exit 0
+                fi
+            else
+                echo "==> [WayRemote] Connessione remota/WAN: Compressione video/LZ4 ottimizzata multithread" >> "$session_log"
+
+                if [ "$can_use_video" -eq 1 ]; then
+                    # Tentativo 1 (WAN): Video H.264 HW con bitrate controllato (~15 Mbps)
+                    if waypipe --threads=0 --video=h264,hw,bpf=250000 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                        exit 0
+                    fi
+
+                    # Tentativo 2 (WAN): Video H.264 SW con bitrate controllato
+                    if waypipe --threads=0 --video=h264,bpf=200000 -c lz4=1 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                        exit 0
+                    fi
+                fi
+
+                # Tentativo 3 (WAN): Compressione standard lz4
+                if waypipe --threads=0 -c lz4 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                    exit 0
+                fi
+
+                # Tentativo 4 (WAN): Fallback software senza GPU
+                if waypipe --threads=0 --no-gpu -c lz4 "${wp_extra[@]}" ssh "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1; then
+                    exit 0
+                fi
             fi
 
             # Fallback automatico su SSH X11 Forwarding se waypipe fallisce sul server
             echo "==> [WayRemote] Fallback automatico su SSH X11 Forwarding..." >> "$session_log"
-            ssh -Y -C -o ForwardX11Timeout=0 "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "nemo || nautilus || thunar || x-terminal-emulator || xterm" >> "$session_log" 2>&1
+            ssh -Y -o ForwardX11Timeout=0 "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "nemo || nautilus || thunar || x-terminal-emulator || xterm" >> "$session_log" 2>&1
         else
-            echo "==> [WayRemote] Avvio sessione X11 (SSH Forwarding con compressione) su $remote_user@$remote_ip" > "$session_log"
-            ssh -Y -C -o ForwardX11Timeout=0 "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1
+            echo "==> [WayRemote] Avvio sessione X11 (SSH Forwarding con accelerazione crittografica hardware) su $remote_user@$remote_ip" > "$session_log"
+            ssh -Y -o ForwardX11Timeout=0 "${SSH_OPTS[@]}" "$remote_user@$remote_ip" "$remote_cmd" >> "$session_log" 2>&1
         fi
     )
     local wp_exit=$?
